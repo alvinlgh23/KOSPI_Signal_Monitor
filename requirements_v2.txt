@@ -1,0 +1,12 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+yfinance==0.2.40
+pandas==2.2.2
+numpy==1.26.4
+statsmodels==0.14.2
+arch==7.0.0
+PyWavelets==1.6.0
+FinanceDataReader==0.9.50
+pykrx==1.0.47
+pandas-datareader==0.10.0
+requests==2.32.3

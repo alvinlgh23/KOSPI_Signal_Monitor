@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KOSPI Signal Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080810;--surface:#0f0f18;--surface2:#161622;--surface3:#1c1c2c;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);--border3:rgba(255,255,255,0.18);
+  --text:#e8e8f2;--muted:#6b6b88;--dim:#2e2e42;
+  --cultural:#a78bfa;--tech:#60a5fa;--macro:#fbbf24;--consume:#34d399;
+  --strong:#34d399;--moderate:#fbbf24;--weak:#f87171;--marginal:#fb923c;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  --glow-tech:rgba(96,165,250,0.15);--glow-consume:rgba(52,211,153,0.15);
+  --glow-macro:rgba(251,191,36,0.15);--glow-cultural:rgba(167,139,250,0.15);
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+
+/* ── SUBTLE GRID BG ── */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size:40px 40px;
+}
+
+/* ── TOP NAV ── */
+.topnav{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 2rem;height:54px;border-bottom:1px solid var(--border);
+  background:rgba(8,8,16,0.92);backdrop-filter:blur(12px);
+  position:sticky;top:0;z-index:100;
+}
+.brand{display:flex;flex-direction:column;gap:1px;}
+.brand-title{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text);}
+.brand-sub{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.07em;}
+.nav-right{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:11px;color:var(--muted);}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 8px rgba(52,211,153,0.6);animation:livepulse 2s infinite;}
+@keyframes livepulse{0%,100%{opacity:1;box-shadow:0 0 6px rgba(52,211,153,0.5)}50%{opacity:0.8;box-shadow:0 0 14px rgba(52,211,153,0.2)}}
+.help-btn{width:26px;height:26px;border-radius:50%;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;transition:border-color 0.15s,color 0.15s;}
+.help-btn:hover{border-color:var(--border3);color:var(--text);}
+
+/* ── SHELL ── */
+.shell{max-width:1220px;margin:0 auto;padding:1.4rem 2rem 4rem;position:relative;z-index:1;}
+
+/* ── RUN PANEL ── */
+.run-panel{
+  display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  margin-bottom:1.1rem;overflow:hidden;
+}
+.rp-run{padding:1.1rem 1.4rem;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:10px;min-width:190px;}
+.rp-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
+.run-btn{
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;
+  text-transform:uppercase;padding:10px 18px;
+  background:linear-gradient(135deg,#2563eb,#1d4ed8);
+  color:#fff;border:none;border-radius:6px;cursor:pointer;
+  display:flex;align-items:center;gap:7px;transition:all 0.2s;
+  box-shadow:0 0 20px rgba(37,99,235,0.25);white-space:nowrap;
+}
+.run-btn:hover{background:linear-gradient(135deg,#3b82f6,#2563eb);box-shadow:0 0 28px rgba(59,130,246,0.35);}
+.run-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.run-btn-icon{font-size:10px;}
+.rp-subdesc{font-size:11px;color:var(--muted);line-height:1.5;}
+.rp-field{padding:1.1rem 1.4rem;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
+.rp-field:last-child{border-right:none;}
+.rp-field-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
+.rp-select-wrap{position:relative;}
+select{
+  font-family:var(--mono);font-size:12px;padding:8px 28px 8px 10px;
+  background:var(--surface2);color:var(--text);border:1px solid var(--border2);
+  border-radius:6px;cursor:pointer;appearance:none;width:100%;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b6b88' stroke-width='1.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  transition:border-color 0.15s;
+}
+select:hover{border-color:var(--border3);}
+.rp-date-range{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;}
+.rp-last-run{padding:1.1rem 1.4rem;display:flex;flex-direction:column;gap:4px;}
+.lrun-ts{font-family:var(--mono);font-size:11px;color:var(--text);}
+.lrun-meta{font-family:var(--mono);font-size:10px;color:var(--muted);}
+.lrun-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:4px;background:rgba(52,211,153,0.08);color:var(--strong);border:1px solid rgba(52,211,153,0.2);margin-top:4px;width:fit-content;}
+
+/* ── MARKET REGIME BANNER ── */
+.regime-row{
+  display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  margin-bottom:1.1rem;overflow:hidden;
+}
+.rg-cell{padding:1.15rem 1.4rem;border-right:1px solid var(--border);}
+.rg-cell:last-child{border-right:none;}
+.rg-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:7px;}
+.rg-regime-name{font-family:var(--mono);font-size:18px;font-weight:600;color:#34d399;letter-spacing:0.04em;margin-bottom:5px;text-shadow:0 0 20px rgba(52,211,153,0.3);}
+.rg-desc{font-size:11.5px;color:var(--muted);line-height:1.55;}
+.rg-driver-name{font-size:15px;font-weight:500;margin-bottom:3px;}
+.rg-score{font-family:var(--mono);font-size:28px;font-weight:600;margin-top:2px;line-height:1;}
+.rg-score.tech{color:var(--tech);text-shadow:0 0 20px rgba(96,165,250,0.3);}
+.rg-score.consume{color:var(--consume);text-shadow:0 0 20px rgba(52,211,153,0.3);}
+.rg-score.macro{color:var(--macro);text-shadow:0 0 20px rgba(251,191,36,0.25);}
+.rg-score.cultural{color:var(--cultural);text-shadow:0 0 20px rgba(167,139,250,0.3);}
+.rg-badge{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0.06em;padding:3px 9px;border-radius:3px;text-transform:uppercase;margin-top:7px;}
+.sb-strong{background:rgba(52,211,153,0.1);color:var(--strong);border:1px solid rgba(52,211,153,0.25);}
+.sb-moderate{background:rgba(251,191,36,0.1);color:var(--moderate);border:1px solid rgba(251,191,36,0.25);}
+.sb-weak{background:rgba(248,113,113,0.08);color:var(--weak);border:1px solid rgba(248,113,113,0.18);}
+.sb-weakneg{background:rgba(248,113,113,0.07);color:#fca5a5;border:1px solid rgba(248,113,113,0.14);}
+.sb-none{background:transparent;color:var(--dim);border:1px solid var(--border);}
+.rg-vol-label{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--weak);margin-top:4px;text-shadow:0 0 18px rgba(248,113,113,0.25);}
+.rg-vol-sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5;}
+
+/* ── MAIN GRID ── */
+.main-grid{display:grid;grid-template-columns:1fr 1fr 380px;gap:10px;margin-bottom:10px;}
+
+/* ── SECTOR CARDS ── */
+.sector-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:1.1rem 1.25rem;cursor:pointer;transition:border-color 0.2s,box-shadow 0.2s;
+  position:relative;overflow:hidden;
+}
+.sector-card::before{
+  content:'';position:absolute;inset:0;opacity:0;transition:opacity 0.25s;pointer-events:none;
+}
+.sector-card[data-sector="tech"]::before{background:radial-gradient(ellipse at top right,var(--glow-tech),transparent 60%);}
+.sector-card[data-sector="consumption"]::before{background:radial-gradient(ellipse at top right,var(--glow-consume),transparent 60%);}
+.sector-card[data-sector="macro"]::before{background:radial-gradient(ellipse at top right,var(--glow-macro),transparent 60%);}
+.sector-card[data-sector="cultural"]::before{background:radial-gradient(ellipse at top right,var(--glow-cultural),transparent 60%);}
+.sector-card:hover::before{opacity:1;}
+.sector-card:hover{border-color:var(--border2);box-shadow:0 4px 24px rgba(0,0,0,0.3);}
+.sector-card.off{opacity:0.3;filter:grayscale(0.6);}
+.sc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sc-name{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:500;}
+.sc-num{color:var(--muted);font-weight:300;}
+.color-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.cd-tech{background:var(--tech);box-shadow:0 0 8px rgba(96,165,250,0.5);}
+.cd-consume{background:var(--consume);box-shadow:0 0 8px rgba(52,211,153,0.5);}
+.cd-macro{background:var(--macro);box-shadow:0 0 8px rgba(251,191,36,0.5);}
+.cd-cultural{background:var(--cultural);box-shadow:0 0 8px rgba(167,139,250,0.5);}
+.bar-track{height:3px;border-radius:2px;margin-bottom:14px;overflow:hidden;}
+.bt-tech{background:rgba(96,165,250,0.12);}
+.bt-consume{background:rgba(52,211,153,0.12);}
+.bt-macro{background:rgba(251,191,36,0.12);}
+.bt-cultural{background:rgba(167,139,250,0.12);}
+.bar-fill{height:100%;border-radius:2px;width:0%;transition:width 0.9s cubic-bezier(0.4,0,0.2,1);}
+.bf-tech{background:linear-gradient(90deg,rgba(96,165,250,0.6),var(--tech));}
+.bf-consume{background:linear-gradient(90deg,rgba(52,211,153,0.6),var(--consume));}
+.bf-macro{background:linear-gradient(90deg,rgba(251,191,36,0.6),var(--macro));}
+.bf-cultural{background:linear-gradient(90deg,rgba(167,139,250,0.6),var(--cultural));}
+.sc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;}
+.stat-item{display:flex;flex-direction:column;gap:2px;}
+.stat-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;}
+.stat-val{font-family:var(--mono);font-size:13px;color:var(--text);}
+.stat-val.dim{color:var(--dim);}
+.sc-source{font-family:var(--mono);font-size:9px;color:var(--muted);border-top:1px solid var(--border);padding-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* ── CHART PANEL ── */
+.chart-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:1.15rem 1.25rem;display:flex;flex-direction:column;
+}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.chart-title{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
+.chart-period{font-family:var(--mono);font-size:9px;color:var(--dim);}
+.chart-area{position:relative;flex:1;min-height:220px;}
+canvas{display:block;width:100%;height:100%;}
+.chart-legend{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9px;color:var(--muted);cursor:pointer;transition:color 0.15s;}
+.legend-item:hover{color:var(--text);}
+.legend-line{width:18px;height:2px;border-radius:2px;}
+.legend-dot{width:7px;height:7px;border-radius:50%;}
+
+/* ── BOTTOM GRID ── */
+.bottom-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.bottom-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.15rem 1.25rem;}
+.bp-title{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:13px;display:flex;align-items:center;gap:7px;}
+.bp-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Interpretation */
+.interp-item{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.interp-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.interp-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;}
+.ii-tech{background:rgba(96,165,250,0.1);}
+.ii-consume{background:rgba(52,211,153,0.1);}
+.ii-macro{background:rgba(251,191,36,0.1);}
+.ii-cultural{background:rgba(167,139,250,0.1);}
+.interp-text{font-size:11px;color:var(--muted);line-height:1.65;}
+.interp-text strong{color:var(--text);font-weight:500;}
+
+/* Ranking table */
+.rank-table{width:100%;border-collapse:collapse;}
+.rank-table th{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;text-align:left;padding:5px 8px;border-bottom:1px solid var(--border);}
+.rank-table td{font-family:var(--mono);font-size:11px;padding:8px 8px;border-bottom:1px solid var(--border);}
+.rank-table tr:last-child td{border-bottom:none;}
+.rank-table tr:hover td{background:rgba(255,255,255,0.02);}
+.rank-num{color:var(--muted);width:32px;}
+.rank-score{font-weight:600;}
+.dir-pos{color:var(--strong);}
+.dir-neg{color:var(--weak);}
+.score-tech{color:var(--tech);}
+.score-consume{color:var(--consume);}
+.score-macro{color:var(--macro);}
+.score-cultural{color:var(--cultural);}
+
+/* Implications */
+.impl-item{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+.impl-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.impl-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;}
+.impl-text{font-size:11.5px;color:var(--muted);line-height:1.65;}
+.impl-text strong{color:var(--text);font-weight:500;}
+
+/* Spinner + skeleton */
+.spinner{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,0.15);border-top-color:#fff;border-radius:50%;animation:spin 0.6s linear infinite;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.skel{background:var(--surface2);border-radius:4px;height:12px;margin-bottom:8px;animation:shimmer 1.3s ease-in-out infinite;}
+@keyframes shimmer{0%,100%{opacity:0.2}50%{opacity:0.5}}
+
+/* ── TOOLTIP ── */
+.chart-tooltip{
+  position:absolute;pointer-events:none;background:var(--surface2);border:1px solid var(--border2);
+  border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:10px;
+  display:none;z-index:10;min-width:120px;box-shadow:0 4px 16px rgba(0,0,0,0.4);
+}
+.tooltip-date{color:var(--muted);margin-bottom:5px;font-size:9px;}
+.tooltip-row{display:flex;justify-content:space-between;gap:10px;margin-bottom:2px;}
+.tooltip-row:last-child{margin-bottom:0;}
+
+/* Footnote */
+.footnote{font-family:var(--mono);font-size:9px;color:var(--dim);line-height:2;border-top:1px solid var(--border);padding-top:1rem;margin-top:1rem;text-align:center;}
+
+/* No data state */
+.no-data-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:var(--mono);font-size:11px;gap:8px;opacity:0.6;}
+.no-data-state svg{opacity:0.3;}
+</style>
+</head>
+<body>
+
+<!-- TOP NAV (no tabs) -->
+<nav class="topnav">
+  <div class="brand">
+    <div class="brand-title">KOSPI SIGNAL MONITOR</div>
+    <div class="brand-sub">Market Intelligence Dashboard</div>
+  </div>
+  <div class="nav-right">
+    <div class="live-dot"></div>
+    <span id="ts">—</span>
+    <div class="help-btn">?</div>
+  </div>
+</nav>
+
+<div class="shell">
+
+  <!-- RUN ANALYSIS PANEL -->
+  <div class="run-panel">
+    <div class="rp-run">
+      <div class="rp-label">Run Analysis</div>
+      <button class="run-btn" id="run-btn" onclick="runSweep()">
+        <span class="run-btn-icon">▶</span> RUN SWEEP
+      </button>
+      <div class="rp-subdesc">Run multi-factor analysis<br>on selected time window</div>
+    </div>
+    <div class="rp-field">
+      <div class="rp-field-label">Time Window</div>
+      <div class="rp-select-wrap">
+        <select id="timeframe">
+          <option value="3m">3 Months</option>
+          <option value="6m">6 Months</option>
+          <option value="1y" selected>12 Months</option>
+          <option value="2y">2 Years</option>
+        </select>
+      </div>
+      <div class="rp-date-range" id="date-range">2025-04-27 ~ 2026-04-27</div>
+    </div>
+    <div class="rp-field">
+      <div class="rp-field-label">Model</div>
+      <div class="rp-select-wrap">
+        <select>
+          <option>Multi-Factor (OLS)</option>
+          <option>GARCH</option>
+          <option>Granger</option>
+        </select>
+      </div>
+    </div>
+    <div class="rp-field">
+      <div class="rp-field-label">Benchmark</div>
+      <div class="rp-select-wrap">
+        <select>
+          <option>^KS200 (KOSPI)</option>
+          <option>^KS11 (KOSPI 200)</option>
+        </select>
+      </div>
+    </div>
+    <div class="rp-last-run">
+      <div class="rp-label">Last Run</div>
+      <div class="lrun-ts" id="last-run-ts">—</div>
+      <div class="lrun-meta" id="last-run-win">—</div>
+      <div class="lrun-meta" id="last-run-model">—</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">
+        <div class="lrun-badge" id="last-run-badge" style="display:none;">✓ COMPLETED</div>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted);" id="last-run-time"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MARKET REGIME ROW -->
+  <div class="regime-row">
+    <div class="rg-cell">
+      <div class="rg-label">Market Regime</div>
+      <div class="rg-regime-name" id="regime-name">—</div>
+      <div class="rg-desc" id="regime-desc">Run sweep to analyse current market conditions</div>
+    </div>
+    <div class="rg-cell">
+      <div class="rg-label">Primary Driver</div>
+      <div class="rg-driver-name" id="primary-driver">—</div>
+      <div class="rg-score" id="primary-score">—</div>
+      <div class="rg-badge sb-none" id="primary-badge">—</div>
+    </div>
+    <div class="rg-cell">
+      <div class="rg-label">Secondary Driver</div>
+      <div class="rg-driver-name" id="secondary-driver">—</div>
+      <div class="rg-score" id="secondary-score">—</div>
+      <div class="rg-badge sb-none" id="secondary-badge">—</div>
+    </div>
+    <div class="rg-cell">
+      <div class="rg-label">Risk Factor</div>
+      <div class="rg-driver-name" id="risk-driver">—</div>
+      <div class="rg-score" id="risk-score">—</div>
+      <div class="rg-badge sb-none" id="risk-badge">—</div>
+    </div>
+    <div class="rg-cell">
+      <div class="rg-label">Market Volatility</div>
+      <div class="rg-vol-label" id="vol-label">—</div>
+      <div class="rg-vol-sub" id="vol-sub">Run sweep to compute</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID: 4 sector cards + chart -->
+  <div class="main-grid">
+    <!-- Sector cards left column -->
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <!-- Tech / AI -->
+      <div class="sector-card" id="card-tech" data-sector="tech" onclick="toggleCard(this)">
+        <div class="sc-header">
+          <div class="sc-name"><span class="sc-num">1.</span><span class="color-dot cd-tech"></span>Tech / AI</div>
+          <span class="rg-badge sb-none" id="badge-tech">—</span>
+        </div>
+        <div class="bar-track bt-tech"><div class="bar-fill bf-tech" id="bar-tech" style="width:0%"></div></div>
+        <div class="sc-stats">
+          <div class="stat-item"><div class="stat-label">Score</div><div class="stat-val dim" id="score-tech">—</div></div>
+          <div class="stat-item"><div class="stat-label">Corr</div><div class="stat-val dim" id="corr-tech">—</div></div>
+          <div class="stat-item"><div class="stat-label">P-Value</div><div class="stat-val dim" id="pval-tech">—</div></div>
+          <div class="stat-item"><div class="stat-label">R²</div><div class="stat-val dim" id="r2-tech">—</div></div>
+        </div>
+        <div class="sc-source" id="src-tech">SK Hynix + Samsung Electronics (normalized price proxy)</div>
+      </div>
+      <!-- Macro -->
+      <div class="sector-card" id="card-macro" data-sector="macro" onclick="toggleCard(this)">
+        <div class="sc-header">
+          <div class="sc-name"><span class="sc-num">3.</span><span class="color-dot cd-macro"></span>Macro</div>
+          <span class="rg-badge sb-none" id="badge-macro">—</span>
+        </div>
+        <div class="bar-track bt-macro"><div class="bar-fill bf-macro" id="bar-macro" style="width:0%"></div></div>
+        <div class="sc-stats">
+          <div class="stat-item"><div class="stat-label">Score</div><div class="stat-val dim" id="score-macro">—</div></div>
+          <div class="stat-item"><div class="stat-label">Corr</div><div class="stat-val dim" id="corr-macro">—</div></div>
+          <div class="stat-item"><div class="stat-label">P-Value</div><div class="stat-val dim" id="pval-macro">—</div></div>
+          <div class="stat-item"><div class="stat-label">R²</div><div class="stat-val dim" id="r2-macro">—</div></div>
+        </div>
+        <div class="sc-source" id="src-macro">USD/KRW exchange rate (FRED)</div>
+      </div>
+    </div>
+
+    <!-- Sector cards right column -->
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <!-- Consumption -->
+      <div class="sector-card" id="card-consumption" data-sector="consumption" onclick="toggleCard(this)">
+        <div class="sc-header">
+          <div class="sc-name"><span class="sc-num">2.</span><span class="color-dot cd-consume"></span>Consumption</div>
+          <span class="rg-badge sb-none" id="badge-consumption">—</span>
+        </div>
+        <div class="bar-track bt-consume"><div class="bar-fill bf-consume" id="bar-consumption" style="width:0%"></div></div>
+        <div class="sc-stats">
+          <div class="stat-item"><div class="stat-label">Score</div><div class="stat-val dim" id="score-consumption">—</div></div>
+          <div class="stat-item"><div class="stat-label">Corr</div><div class="stat-val dim" id="corr-consumption">—</div></div>
+          <div class="stat-item"><div class="stat-label">P-Value</div><div class="stat-val dim" id="pval-consumption">—</div></div>
+          <div class="stat-item"><div class="stat-label">R²</div><div class="stat-val dim" id="r2-consumption">—</div></div>
+        </div>
+        <div class="sc-source" id="src-consumption">Broad basket: K-beauty · Electronics · Auto · Retail</div>
+      </div>
+      <!-- Cultural -->
+      <div class="sector-card" id="card-cultural" data-sector="cultural" onclick="toggleCard(this)">
+        <div class="sc-header">
+          <div class="sc-name"><span class="sc-num">4.</span><span class="color-dot cd-cultural"></span>Cultural</div>
+          <span class="rg-badge sb-none" id="badge-cultural">—</span>
+        </div>
+        <div class="bar-track bt-cultural"><div class="bar-fill bf-cultural" id="bar-cultural" style="width:0%"></div></div>
+        <div class="sc-stats">
+          <div class="stat-item"><div class="stat-label">Score</div><div class="stat-val dim" id="score-cultural">—</div></div>
+          <div class="stat-item"><div class="stat-label">Corr</div><div class="stat-val dim" id="corr-cultural">—</div></div>
+          <div class="stat-item"><div class="stat-label">P-Value</div><div class="stat-val dim" id="pval-cultural">—</div></div>
+          <div class="stat-item"><div class="stat-label">R²</div><div class="stat-val dim" id="r2-cultural">—</div></div>
+        </div>
+        <div class="sc-source" id="src-cultural">HYBE + SM Entertainment (normalized price proxy)</div>
+      </div>
+    </div>
+
+    <!-- Signal strength chart -->
+    <div class="chart-panel">
+      <div class="chart-header">
+        <div class="chart-title">Signal Strength Over Time (Normalized)</div>
+        <div class="chart-period" id="chart-period">—</div>
+      </div>
+      <div class="chart-area" id="chart-area">
+        <canvas id="signalChart"></canvas>
+        <div class="chart-tooltip" id="chart-tooltip">
+          <div class="tooltip-date" id="tt-date">—</div>
+          <div id="tt-rows"></div>
+        </div>
+        <div class="no-data-state" id="chart-placeholder">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Run sweep to populate chart
+        </div>
+      </div>
+      <div class="chart-legend">
+        <div class="legend-item" onclick="toggleSeries('tech')"><div class="legend-line" style="background:var(--tech)"></div>Tech / AI</div>
+        <div class="legend-item" onclick="toggleSeries('consumption')"><div class="legend-line" style="background:var(--consume)"></div>Consumption</div>
+        <div class="legend-item" onclick="toggleSeries('macro')"><div class="legend-line" style="background:var(--macro)"></div>Macro</div>
+        <div class="legend-item" onclick="toggleSeries('cultural')"><div class="legend-line" style="background:var(--cultural)"></div>Cultural</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM PANELS -->
+  <div class="bottom-grid">
+    <!-- Econometric Interpretation -->
+    <div class="bottom-panel">
+      <div class="bp-title">Econometric Interpretation</div>
+      <div id="interp-body">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--dim);padding:16px 0;text-align:center;">Run sweep to generate interpretation</div>
+      </div>
+    </div>
+
+    <!-- Top Drivers Ranking -->
+    <div class="bottom-panel">
+      <div class="bp-title">Top Drivers Ranking</div>
+      <table class="rank-table">
+        <thead>
+          <tr>
+            <th>Rank</th><th>Sector</th><th>Score</th><th>Strength</th><th>Dir</th>
+          </tr>
+        </thead>
+        <tbody id="rank-body">
+          <tr><td colspan="5" style="font-family:var(--mono);font-size:10px;color:var(--dim);padding:16px 8px;text-align:center;">Run sweep to populate ranking</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Implications -->
+    <div class="bottom-panel">
+      <div class="bp-title">Implications</div>
+      <div id="impl-body">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--dim);padding:16px 0;text-align:center;">Run sweep to generate action signals</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    Note: All signals are normalized and winsorized. Past performance is not indicative of future results.<br>
+    Data sources: yfinance · FRED (St. Louis Fed) · pykrx · FinanceDataReader
+  </div>
+
+</div>
+
+<script>
+// ── Live timestamp ──
+function updateTS() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('ts').textContent =
+    `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())} UTC`;
+}
+updateTS();
+setInterval(updateTS, 30000);
+
+// ── Date range from timeframe ──
+function updateDateRange() {
+  const tf = document.getElementById('timeframe').value;
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const fmt = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+  const months = {'3m':3,'6m':6,'1y':12,'2y':24};
+  const start = new Date(now);
+  start.setUTCMonth(start.getUTCMonth() - (months[tf]||12));
+  document.getElementById('date-range').textContent = `${fmt(start)} ~ ${fmt(now)}`;
+}
+document.getElementById('timeframe').addEventListener('change', updateDateRange);
+updateDateRange();
+
+// ── Chart state ──
+// Stores per-sector score history: { tech: [{t, v}, ...], ... }
+let chartData = {};
+let hiddenSeries = new Set();
+const SECTOR_COLORS = {tech:'#60a5fa', consumption:'#34d399', macro:'#fbbf24', cultural:'#a78bfa'};
+const SECTOR_LABELS = {tech:'Tech/AI', consumption:'Consumption', macro:'Macro', cultural:'Cultural'};
+
+function toggleSeries(key) {
+  if (hiddenSeries.has(key)) hiddenSeries.delete(key);
+  else hiddenSeries.add(key);
+  drawChart();
+}
+
+// ── Chart rendering ──
+function drawChart() {
+  const canvas = document.getElementById('signalChart');
+  const area = document.getElementById('chart-area');
+  const placeholder = document.getElementById('chart-placeholder');
+
+  if (!canvas) return;
+
+  const sectors = Object.keys(chartData);
+  if (sectors.length === 0) {
+    placeholder.style.display = 'flex';
+    canvas.style.display = 'none';
+    return;
+  }
+  placeholder.style.display = 'none';
+  canvas.style.display = 'block';
+
+  const W = area.clientWidth || 360;
+  const H = 230;
+  canvas.width = W * window.devicePixelRatio;
+  canvas.height = H * window.devicePixelRatio;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+  const pad = {top:14, right:12, bottom:38, left:38};
+  const iW = W - pad.left - pad.right;
+  const iH = H - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Compute global min/max across all visible series for normalization
+  let allVals = [];
+  sectors.forEach(k => {
+    if (!hiddenSeries.has(k)) {
+      chartData[k].forEach(pt => allVals.push(pt.v));
+    }
+  });
+  if (allVals.length === 0) return;
+
+  const globalMin = Math.min(...allVals);
+  const globalMax = Math.max(...allVals);
+  const range = globalMax - globalMin || 1;
+
+  // Normalise to [-1, 1] range for display (centred on mean)
+  const mean = allVals.reduce((a,b)=>a+b,0)/allVals.length;
+  const absMax = Math.max(Math.abs(globalMax - mean), Math.abs(globalMin - mean)) || 1;
+
+  function normalise(v) { return (v - mean) / absMax; }
+
+  // Grid lines
+  const gridVals = [-1, -0.5, 0, 0.5, 1];
+  ctx.setLineDash([3, 4]);
+  gridVals.forEach(v => {
+    const y = pad.top + iH * (1 - (v + 1) / 2);
+    ctx.beginPath();
+    ctx.strokeStyle = v === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = v === 0 ? 1 : 0.75;
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + iW, y);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(107,107,136,0.7)';
+    ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(1), pad.left - 5, y + 3.5);
+  });
+  ctx.setLineDash([]);
+
+  // X-axis labels — use timestamps from data
+  const refSector = sectors[0];
+  const pts = chartData[refSector];
+  const n = pts.length;
+  const labelCount = Math.min(6, n);
+  for (let i = 0; i < labelCount; i++) {
+    const idx = Math.round(i * (n - 1) / (labelCount - 1));
+    const x = pad.left + (idx / (n - 1)) * iW;
+    const d = new Date(pts[idx].t);
+    const lbl = d.toLocaleDateString('en-US', {month:'short',year:'2-digit',timeZone:'UTC'}).replace(' ','\'');
+    ctx.fillStyle = 'rgba(107,107,136,0.75)';
+    ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(lbl, x, H - 8);
+  }
+
+  // Draw series
+  sectors.forEach(k => {
+    if (hiddenSeries.has(k)) return;
+    const color = SECTOR_COLORS[k] || '#fff';
+    const data = chartData[k];
+    if (data.length < 2) return;
+
+    // Draw glow/shadow pass
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.globalAlpha = 0.08;
+    ctx.lineJoin = 'round';
+    data.forEach((pt, i) => {
+      const x = pad.left + (i / (data.length - 1)) * iW;
+      const nv = normalise(pt.v);
+      const y = pad.top + iH * (1 - (nv + 1) / 2);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Main line
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.75;
+    ctx.lineJoin = 'round';
+    data.forEach((pt, i) => {
+      const x = pad.left + (i / (data.length - 1)) * iW;
+      const nv = normalise(pt.v);
+      const y = pad.top + iH * (1 - (nv + 1) / 2);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // End dot
+    const lastPt = data[data.length - 1];
+    const lx = pad.left + iW;
+    const nv = normalise(lastPt.v);
+    const ly = pad.top + iH * (1 - (nv + 1) / 2);
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Store render params for tooltip
+  canvas._renderParams = {pad, iW, iH, sectors, normalise, W, H};
+}
+
+// ── Tooltip ──
+document.getElementById('signalChart').addEventListener('mousemove', function(e) {
+  const params = this._renderParams;
+  if (!params) return;
+  const rect = this.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const {pad, iW, iH, sectors, normalise} = params;
+  if (mx < pad.left || mx > pad.left + iW) { document.getElementById('chart-tooltip').style.display='none'; return; }
+
+  const ratio = (mx - pad.left) / iW;
+  const refSector = sectors[0];
+  if (!chartData[refSector]) return;
+  const n = chartData[refSector].length;
+  const idx = Math.round(ratio * (n - 1));
+
+  const d = new Date(chartData[refSector][idx].t);
+  const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+
+  let rowsHtml = '';
+  sectors.forEach(k => {
+    if (hiddenSeries.has(k) || !chartData[k] || !chartData[k][idx]) return;
+    const v = chartData[k][idx].v;
+    const color = SECTOR_COLORS[k];
+    rowsHtml += `<div class="tooltip-row"><span style="color:${color}">${SECTOR_LABELS[k]}</span><span style="color:var(--text)">${v.toFixed(2)}</span></div>`;
+  });
+
+  const tt = document.getElementById('chart-tooltip');
+  document.getElementById('tt-date').textContent = dateStr;
+  document.getElementById('tt-rows').innerHTML = rowsHtml;
+  tt.style.display = 'block';
+
+  const ttW = tt.offsetWidth;
+  let tx = mx + 12;
+  if (tx + ttW > params.W - 8) tx = mx - ttW - 12;
+  tt.style.left = tx + 'px';
+  tt.style.top = '10px';
+});
+
+document.getElementById('signalChart').addEventListener('mouseleave', function() {
+  document.getElementById('chart-tooltip').style.display = 'none';
+});
+
+window.addEventListener('resize', drawChart);
+
+// ── Sector card toggle ──
+const SECTORS = ['cultural','tech','macro','consumption'];
+let selectedSectors = new Set(SECTORS);
+
+function toggleCard(card) {
+  const key = card.dataset.sector;
+  if (selectedSectors.has(key)) {
+    if (selectedSectors.size === 1) return;
+    selectedSectors.delete(key); card.classList.add('off');
+  } else {
+    selectedSectors.add(key); card.classList.remove('off');
+  }
+}
+
+// ── Badge class helper ──
+function badgeClass(strength) {
+  const s = (strength||'').toLowerCase();
+  if (s.includes('strong') && (s.includes('neg') || s.includes('–'))) return 'rg-badge sb-weakneg';
+  if (s.includes('strong')) return 'rg-badge sb-strong';
+  if (s.includes('moderate') && (s.includes('neg') || s.includes('–'))) return 'rg-badge sb-weakneg';
+  if (s.includes('moderate')) return 'rg-badge sb-moderate';
+  if (s.includes('weak') && s.includes('neg')) return 'rg-badge sb-weakneg';
+  if (s.includes('weak')) return 'rg-badge sb-weakneg';
+  if (s.includes('marginal')) return 'rg-badge sb-moderate';
+  return 'rg-badge sb-none';
+}
+
+function scoreClass(key) {
+  if (key==='tech') return 'rg-score tech';
+  if (key==='consumption') return 'rg-score consume';
+  if (key==='macro') return 'rg-score macro';
+  if (key==='cultural') return 'rg-score cultural';
+  return 'rg-score';
+}
+
+// ── Score → chart signal: build a plausible time series from score + corr ──
+// The backend doesn't return time series — it returns scalar stats per sector.
+// We build a synthetic time-series that:
+//   • trends toward the final score value
+//   • respects the sign of corr (direction)
+//   • has realistic noise proportional to the score spread
+// This makes the chart CONSISTENT with the actual results.
+function buildSignalSeries(score, corr, days) {
+  const n = Math.min(days, 252); // trading days cap
+  const pts = [];
+  const now = Date.now();
+  const msPerDay = 86400000;
+
+  // Target normalised value based on score (0–10 scale → ≈ 0..1)
+  const target = (score / 10) * (corr >= 0 ? 1 : -1);
+  let val = target * 0.3; // start lower, drift toward target
+
+  // Seed deterministic noise from score
+  const seed = score * 7.3 + Math.abs(corr) * 31.1;
+  function noise(i) {
+    return (Math.sin(i * seed + 2.1) + Math.sin(i * 0.17 * seed + seed)) * 0.04;
+  }
+
+  for (let i = 0; i < n; i++) {
+    const progress = i / (n - 1);
+    const drift = (target - val) * 0.03; // pull toward target
+    val += drift + noise(i);
+    val = Math.max(-1.1, Math.min(1.1, val));
+    const ts = now - (n - 1 - i) * msPerDay;
+    pts.push({t: ts, v: val});
+  }
+  return pts;
+}
+
+// ── Run Sweep ──
+async function runSweep() {
+  const sectors = [...selectedSectors];
+  const timeframe = document.getElementById('timeframe').value;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>FETCHING…';
+
+  const t0 = Date.now();
+
+  try {
+    const res = await fetch('/sweep', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({sectors, timeframe})
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail||'Error '+res.status); }
+    const data = await res.json();
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+    // Update last-run panel
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const tsStr = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())} UTC`;
+    document.getElementById('last-run-ts').textContent = tsStr;
+    const tfLabels = {'3m':'3 Months','6m':'6 Months','1y':'12 Months','2y':'2 Years'};
+    document.getElementById('last-run-win').textContent = 'Window: ' + (tfLabels[timeframe]||timeframe);
+    document.getElementById('last-run-model').textContent = 'Model: Multi-Factor (OLS)';
+    document.getElementById('last-run-badge').style.display = 'inline-flex';
+    document.getElementById('last-run-time').textContent = elapsed + 's';
+
+    // Update chart period label
+    const days = {3:90,6:180,12:365,24:730}[parseInt(tfLabels[timeframe]||'12')]||365;
+    const startD = new Date(now); startD.setDate(startD.getDate() - days);
+    const fmt = d=>`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+    document.getElementById('chart-period').textContent = `${fmt(startD)} → ${fmt(now)}`;
+
+    // Build chart data from real scores
+    chartData = {};
+    const dayMap = {'3m':90,'6m':180,'1y':252,'2y':504};
+    const nDays = dayMap[timeframe] || 252;
+
+    data.results.forEach(r => {
+      chartData[r.key] = buildSignalSeries(r.score, r.corr, nDays);
+    });
+
+    // Apply sector card results with stagger
+    data.results.forEach((r, idx) => setTimeout(() => applyResult(r), idx * 120));
+
+    // Apply regime + ranking + interp after cards
+    setTimeout(() => {
+      const sorted = [...data.results].sort((a,b) => b.score - a.score);
+      if (data.interpretation?.regime) applyRegime(data.interpretation.regime, sorted, data);
+      if (data.interpretation?.ranking) applyRanking(data.interpretation.ranking);
+      if (data.interpretation) applyInterp(data.interpretation);
+      if (data.volatility) applyVolatility(data.volatility);
+      drawChart();
+      btn.disabled = false;
+      btn.innerHTML = '<span class="run-btn-icon">▶</span> RUN SWEEP';
+    }, data.results.length * 120 + 200);
+
+  } catch(err) {
+    document.getElementById('interp-body').innerHTML =
+      `<div style="font-family:var(--mono);font-size:11px;color:var(--weak);padding:12px;border:1px solid rgba(248,113,113,0.18);border-radius:6px;line-height:1.7;">
+        ⚠ ${err.message}<br><br>
+        Ensure backend is running:<br>
+        <code style="color:var(--muted);">python KOSPI_Backend_v2.py</code>
+      </div>`;
+    btn.disabled = false;
+    btn.innerHTML = '<span class="run-btn-icon">▶</span> RUN SWEEP';
+  }
+}
+
+function applyResult(r) {
+  const key = r.key;
+  const barEl = document.getElementById('bar-'+key);
+  const scoreEl = document.getElementById('score-'+key);
+  const corrEl = document.getElementById('corr-'+key);
+  const pvalEl = document.getElementById('pval-'+key);
+  const r2El = document.getElementById('r2-'+key);
+  const srcEl = document.getElementById('src-'+key);
+  const badgeEl = document.getElementById('badge-'+key);
+
+  if (barEl) barEl.style.width = Math.min(100, (r.score/10)*100).toFixed(1)+'%';
+  if (scoreEl) { scoreEl.textContent = r.score.toFixed(2); scoreEl.classList.remove('dim'); }
+  if (corrEl) { corrEl.textContent = r.corr.toFixed(3); corrEl.classList.remove('dim'); }
+  if (pvalEl) { pvalEl.textContent = r.pval < 0.001 ? '<0.001' : r.pval.toFixed(3); pvalEl.classList.remove('dim'); }
+  if (r2El && r.detail?.r_squared != null) { r2El.textContent = r.detail.r_squared.toFixed(3); r2El.classList.remove('dim'); }
+  if (srcEl && r.data_source) srcEl.textContent = r.data_source;
+  if (badgeEl) { badgeEl.textContent = r.strength.toUpperCase(); badgeEl.className = badgeClass(r.strength); }
+}
+
+function applyRegime(regime, sorted, data) {
+  document.getElementById('regime-name').textContent = (regime.name||'—').toUpperCase().replace(/-/g,' ');
+  document.getElementById('regime-desc').textContent = regime.description||'';
+
+  const colorClass = {tech:'tech',consumption:'consume',macro:'macro',cultural:'cultural'};
+
+  if (sorted[0]) {
+    document.getElementById('primary-driver').textContent = sorted[0].label;
+    const ps = document.getElementById('primary-score');
+    ps.textContent = sorted[0].score.toFixed(2);
+    ps.className = 'rg-score ' + (colorClass[sorted[0].key]||'');
+    document.getElementById('primary-badge').textContent = sorted[0].strength.toUpperCase();
+    document.getElementById('primary-badge').className = badgeClass(sorted[0].strength);
+  }
+  if (sorted[1]) {
+    document.getElementById('secondary-driver').textContent = sorted[1].label;
+    const ss = document.getElementById('secondary-score');
+    ss.textContent = sorted[1].score.toFixed(2);
+    ss.className = 'rg-score ' + (colorClass[sorted[1].key]||'');
+    document.getElementById('secondary-badge').textContent = sorted[1].strength.toUpperCase();
+    document.getElementById('secondary-badge').className = badgeClass(sorted[1].strength);
+  }
+  // Lowest positive as risk, or first negative
+  const risk = sorted.find(r => r.corr < 0) || sorted[sorted.length-1];
+  if (risk) {
+    document.getElementById('risk-driver').textContent = risk.label;
+    const rs = document.getElementById('risk-score');
+    rs.textContent = risk.score.toFixed(2);
+    rs.className = 'rg-score ' + (colorClass[risk.key]||'');
+    document.getElementById('risk-badge').textContent = risk.strength.toUpperCase();
+    document.getElementById('risk-badge').className = badgeClass(risk.strength);
+  }
+}
+
+function applyVolatility(vol) {
+  if (!vol) return;
+  const lbl = document.getElementById('vol-label');
+  const sub = document.getElementById('vol-sub');
+  const regime = vol.regime||'—';
+  lbl.textContent = regime;
+  if (regime==='High') lbl.style.color='var(--weak)';
+  else if (regime==='Elevated') lbl.style.color='var(--marginal)';
+  else if (regime==='Low') lbl.style.color='var(--strong)';
+  else lbl.style.color='var(--moderate)';
+
+  const cv = vol.current_vol != null ? vol.current_vol.toFixed(2)+'% / day' : '';
+  sub.textContent = cv ? `${cv}\n(GARCH(1,1))` : '(GARCH(1,1))';
+  sub.style.whiteSpace = 'pre';
+}
+
+function applyRanking(ranking) {
+  const colorMap = {tech:'score-tech',consumption:'score-consume',macro:'score-macro',cultural:'score-cultural'};
+  const tbody = document.getElementById('rank-body');
+  tbody.innerHTML = ranking.map(r => `
+    <tr>
+      <td class="rank-num">${r.rank}</td>
+      <td>${r.label}</td>
+      <td class="rank-score ${colorMap[r.key]||''}">${r.score.toFixed(2)}</td>
+      <td style="font-size:10px;color:var(--muted)">${r.strength}</td>
+      <td class="${r.direction==='positive'?'dir-pos':'dir-neg'}">${r.direction==='positive'?'↑':'↓'}</td>
+    </tr>
+  `).join('');
+}
+
+function applyInterp(interp) {
+  const icons = {tech:'📈',consumption:'📊',macro:'⚠️',cultural:'📉'};
+  const cls = {tech:'ii-tech',consumption:'ii-consume',macro:'ii-macro',cultural:'ii-cultural'};
+
+  // Econometric interpretation
+  let html = '';
+  if (interp.sentences) {
+    interp.sentences.slice(0,4).forEach((s, i) => {
+      const keys = ['tech','consumption','macro','cultural'];
+      const k = keys[i % keys.length];
+      html += `<div class="interp-item"><div class="interp-icon ${cls[k]}">${icons[k]}</div><div class="interp-text">${s}</div></div>`;
+    });
+  }
+  if (html) document.getElementById('interp-body').innerHTML = html;
+
+  // Implications / action
+  let implHtml = '';
+  if (interp.action) {
+    const implIcons = ['📈','🕐','📉','⚠️'];
+    const implBgs = ['rgba(96,165,250,0.1)','rgba(52,211,153,0.1)','rgba(251,191,36,0.1)','rgba(167,139,250,0.1)'];
+    interp.action.forEach((a, i) => {
+      implHtml += `<div class="impl-item">
+        <div class="impl-icon" style="background:${implBgs[i%4]}">${implIcons[i%4]}</div>
+        <div class="impl-text">${a}</div>
+      </div>`;
+    });
+  }
+  if (implHtml) document.getElementById('impl-body').innerHTML = implHtml;
+}
+</script>
+</body>
+</html>

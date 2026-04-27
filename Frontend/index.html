@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KOSPI Signal Monitor v2</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0a0c;--surface:#111116;--surface2:#18181f;--surface3:#1e1e28;
+    --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+    --text:#e8e8f0;--muted:#6b6b80;--dim:#3a3a4a;
+    --cultural:#a78bfa;--tech:#60a5fa;--macro:#fbbf24;--consume:#34d399;
+    --strong:#34d399;--moderate:#fbbf24;--weak:#f87171;--marginal:#fb923c;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  html,body{background:var(--bg);color:var(--text);font-family:var(--sans);}
+  .shell{max-width:1120px;margin:0 auto;padding:2rem 1.5rem 5rem;}
+
+  /* ── Header ── */
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border);}
+  .wordmark{display:flex;align-items:baseline;gap:10px;}
+  .wm-title{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;}
+  .tag{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);}
+  .tag.ok{border-color:rgba(52,211,153,0.4);color:var(--strong);}
+  .tag.err{border-color:rgba(248,113,113,0.3);color:var(--weak);}
+  .hdr-right{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:10px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--dim);transition:background 0.3s;}
+  .dot.running{background:var(--macro);animation:pulse 1s infinite;}
+  .dot.done{background:var(--strong);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+  /* ── Controls ── */
+  .controls{display:flex;gap:8px;margin-bottom:1.75rem;flex-wrap:wrap;align-items:center;}
+  .run-btn{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;padding:9px 20px;background:var(--text);color:var(--bg);border:none;border-radius:4px;cursor:pointer;transition:opacity 0.15s;}
+  .run-btn:hover{opacity:0.85;} .run-btn:disabled{opacity:0.35;cursor:not-allowed;}
+  select{font-family:var(--mono);font-size:11px;padding:9px 28px 9px 12px;background:var(--surface);color:var(--text);border:1px solid var(--border2);border-radius:4px;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b6b80' stroke-width='1.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+  .spinner{display:inline-block;width:10px;height:10px;border:1.5px solid var(--dim);border-top-color:var(--text);border-radius:50%;animation:spin 0.65s linear infinite;margin-right:7px;vertical-align:middle;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── Sector cards ── */
+  .sectors{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:1.25rem;}
+  @media(max-width:600px){.sectors{grid-template-columns:1fr}}
+  .sc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.25rem;cursor:pointer;user-select:none;transition:border-color 0.15s;}
+  .sc:hover{border-color:var(--border2);} .sc.off{opacity:0.35;}
+  .ct{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .cn{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;}
+  .pip{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+  .pip-cultural{background:var(--cultural);} .pip-tech{background:var(--tech);} .pip-macro{background:var(--macro);} .pip-consumption{background:var(--consume);}
+  .sb{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0.06em;padding:3px 8px;border-radius:3px;text-transform:uppercase;white-space:nowrap;}
+  .sb-strong{background:rgba(52,211,153,0.12);color:var(--strong);border:1px solid rgba(52,211,153,0.25);}
+  .sb-strongneg{background:rgba(52,211,153,0.08);color:#6ee7b7;border:1px solid rgba(52,211,153,0.2);}
+  .sb-mod{background:rgba(251,191,36,0.12);color:var(--moderate);border:1px solid rgba(251,191,36,0.25);}
+  .sb-modneg{background:rgba(251,191,36,0.08);color:#fcd34d;border:1px solid rgba(251,191,36,0.2);}
+  .sb-weak{background:rgba(248,113,113,0.10);color:var(--weak);border:1px solid rgba(248,113,113,0.2);}
+  .sb-weakneg{background:rgba(248,113,113,0.07);color:#fca5a5;border:1px solid rgba(248,113,113,0.15);}
+  .sb-marg{background:rgba(251,146,60,0.10);color:var(--marginal);border:1px solid rgba(251,146,60,0.2);}
+  .sb-none{background:transparent;color:var(--dim);border:1px solid var(--border);}
+  .bar-track{height:3px;background:var(--surface2);border-radius:2px;margin-bottom:10px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:2px;width:0%;transition:width 0.7s cubic-bezier(0.4,0,0.2,1);}
+  .f-cultural{background:var(--cultural);} .f-tech{background:var(--tech);} .f-macro{background:var(--macro);} .f-consumption{background:var(--consume);}
+  .cs{display:flex;gap:14px;flex-wrap:wrap;}
+  .si{display:flex;flex-direction:column;gap:2px;}
+  .sl{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;}
+  .sv{font-family:var(--mono);font-size:13px;color:var(--text);} .sv.dim{color:var(--dim);}
+  .src{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  /* ── Regime banner ── */
+  .regime-banner{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px 18px;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .rb-left{display:flex;flex-direction:column;gap:4px;}
+  .rb-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
+  .rb-name{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);}
+  .rb-desc{font-size:12px;color:var(--muted);margin-top:2px;}
+  .rb-right{display:flex;gap:8px;flex-wrap:wrap;}
+  .regime-tag{font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);color:var(--muted);}
+  .rt-tech{border-color:rgba(96,165,250,0.4);color:var(--tech);}
+  .rt-macro{border-color:rgba(251,191,36,0.4);color:var(--moderate);}
+  .rt-vol-high{border-color:rgba(248,113,113,0.4);color:var(--weak);}
+  .rt-vol-normal{border-color:rgba(52,211,153,0.3);color:var(--strong);}
+  .rt-vol-elevated{border-color:rgba(251,146,60,0.4);color:var(--marginal);}
+
+  /* ── Detail + meta rows ── */
+  .detail-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1.25rem;}
+  @media(max-width:600px){.detail-row{grid-template-columns:repeat(2,1fr)}}
+  .dc{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;}
+  .dl{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
+  .dv{font-family:var(--mono);font-size:13px;color:var(--text);}
+  .ds{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;}
+  .meta-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1.25rem;}
+  @media(max-width:600px){.meta-row{grid-template-columns:repeat(2,1fr)}}
+  .mc{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;}
+  .ml{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px;}
+  .mv{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--text);}
+  .mv.dim{color:var(--dim);font-size:14px;}
+  .ms{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;}
+  .vol-high{color:var(--weak);} .vol-elevated{color:var(--marginal);} .vol-normal{color:var(--strong);} .vol-low{color:var(--tech);}
+
+  /* ── Output panel ── */
+  .output-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.4rem 1.5rem;margin-bottom:1rem;}
+  .op-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .op-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;}
+  .method-badge{background:rgba(96,165,250,0.12);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);font-size:8px;padding:1px 6px;border-radius:3px;font-family:var(--mono);}
+
+  /* Interpretation */
+  .interp-section{margin-bottom:1.25rem;}
+  .section-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;}
+  .sentence{font-size:13px;font-weight:300;line-height:1.8;color:var(--text);margin-bottom:8px;padding-left:12px;border-left:2px solid var(--border2);}
+  .sentence:last-child{margin-bottom:0;}
+  .action-item{font-size:13px;font-weight:300;line-height:1.7;color:var(--text);padding:8px 12px;background:var(--surface2);border-radius:4px;margin-bottom:6px;border-left:2px solid rgba(96,165,250,0.4);}
+  .action-item:last-child{margin-bottom:0;}
+  .arrow{color:var(--tech);font-family:var(--mono);margin-right:6px;}
+
+  /* Ranking */
+  .ranking-table{width:100%;border-collapse:collapse;}
+  .ranking-table th{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);}
+  .ranking-table td{font-family:var(--mono);font-size:12px;color:var(--text);padding:8px 10px;border-bottom:1px solid var(--border);}
+  .ranking-table tr:last-child td{border-bottom:none;}
+  .rank-num{color:var(--muted);} .rank-score{font-weight:600;}
+  .dir-pos{color:var(--strong);} .dir-neg{color:var(--weak);}
+
+  /* Empty / skeleton */
+  .output-empty{font-size:13px;color:var(--muted);}
+  .skel{background:var(--surface2);border-radius:4px;height:13px;margin-bottom:9px;animation:shimmer 1.3s ease-in-out infinite;}
+  @keyframes shimmer{0%,100%{opacity:0.3}50%{opacity:0.7}}
+  .error-box{background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:6px;padding:12px 16px;font-family:var(--mono);font-size:11px;color:var(--weak);line-height:1.6;}
+
+  .divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
+  .footnote{font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.8;border-top:1px solid var(--border);padding-top:1rem;margin-top:1rem;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <div class="topbar">
+    <div class="wordmark">
+      <span class="wm-title">KOSPI · Signal Monitor</span>
+      <span class="tag ok" id="tag-ks200">^KS200</span>
+      <span class="tag" id="tag-fdr">FDR</span>
+      <span class="tag" id="tag-krx">KRX</span>
+      <span class="tag" id="tag-fred">FRED</span>
+    </div>
+    <div class="hdr-right">
+      <div class="dot" id="status-dot"></div>
+      <span id="ts">—</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="run-btn" id="run-btn" onclick="runSweep()">▶ Run Sweep</button>
+    <select id="timeframe">
+      <option value="3m">3 months</option>
+      <option value="6m">6 months</option>
+      <option value="1y" selected>12 months</option>
+      <option value="2y">2 years</option>
+    </select>
+  </div>
+
+  <!-- Sector cards -->
+  <div class="sectors">
+    <div class="sc" id="card-cultural" data-sector="cultural" onclick="toggleCard(this)">
+      <div class="ct"><div class="cn"><span class="pip pip-cultural"></span>Cultural</div><span class="sb sb-none" id="badge-cultural">—</span></div>
+      <div class="bar-track"><div class="bar-fill f-cultural" id="bar-cultural"></div></div>
+      <div class="cs">
+        <div class="si"><div class="sl">Score</div><div class="sv dim" id="score-cultural">—</div></div>
+        <div class="si"><div class="sl">Corr</div><div class="sv dim" id="corr-cultural">—</div></div>
+        <div class="si"><div class="sl">p-value</div><div class="sv dim" id="pval-cultural">—</div></div>
+        <div class="si"><div class="sl">R²</div><div class="sv dim" id="r2-cultural">—</div></div>
+      </div>
+      <div class="src" id="src-cultural">HYBE + SM Entertainment (proxy)</div>
+    </div>
+    <div class="sc" id="card-tech" data-sector="tech" onclick="toggleCard(this)">
+      <div class="ct"><div class="cn"><span class="pip pip-tech"></span>Tech / AI</div><span class="sb sb-none" id="badge-tech">—</span></div>
+      <div class="bar-track"><div class="bar-fill f-tech" id="bar-tech"></div></div>
+      <div class="cs">
+        <div class="si"><div class="sl">Score</div><div class="sv dim" id="score-tech">—</div></div>
+        <div class="si"><div class="sl">Corr</div><div class="sv dim" id="corr-tech">—</div></div>
+        <div class="si"><div class="sl">p-value</div><div class="sv dim" id="pval-tech">—</div></div>
+        <div class="si"><div class="sl">R²</div><div class="sv dim" id="r2-tech">—</div></div>
+      </div>
+      <div class="src" id="src-tech">SK Hynix + Samsung Electronics (proxy)</div>
+    </div>
+    <div class="sc" id="card-macro" data-sector="macro" onclick="toggleCard(this)">
+      <div class="ct"><div class="cn"><span class="pip pip-macro"></span>Macro</div><span class="sb sb-none" id="badge-macro">—</span></div>
+      <div class="bar-track"><div class="bar-fill f-macro" id="bar-macro"></div></div>
+      <div class="cs">
+        <div class="si"><div class="sl">Score</div><div class="sv dim" id="score-macro">—</div></div>
+        <div class="si"><div class="sl">Corr</div><div class="sv dim" id="corr-macro">—</div></div>
+        <div class="si"><div class="sl">p-value</div><div class="sv dim" id="pval-macro">—</div></div>
+        <div class="si"><div class="sl">R²</div><div class="sv dim" id="r2-macro">—</div></div>
+      </div>
+      <div class="src" id="src-macro">USD/KRW exchange rate (FRED/yfinance)</div>
+    </div>
+    <div class="sc" id="card-consumption" data-sector="consumption" onclick="toggleCard(this)">
+      <div class="ct"><div class="cn"><span class="pip pip-consumption"></span>Consumption</div><span class="sb sb-none" id="badge-consumption">—</span></div>
+      <div class="bar-track"><div class="bar-fill f-consumption" id="bar-consumption"></div></div>
+      <div class="cs">
+        <div class="si"><div class="sl">Score</div><div class="sv dim" id="score-consumption">—</div></div>
+        <div class="si"><div class="sl">Corr</div><div class="sv dim" id="corr-consumption">—</div></div>
+        <div class="si"><div class="sl">p-value</div><div class="sv dim" id="pval-consumption">—</div></div>
+        <div class="si"><div class="sl">R²</div><div class="sv dim" id="r2-consumption">—</div></div>
+      </div>
+      <div class="src" id="src-consumption">Amorepacific + LG H&H (proxy)</div>
+    </div>
+  </div>
+
+  <!-- Regime banner -->
+  <div class="regime-banner" id="regime-banner" style="display:none">
+    <div class="rb-left">
+      <div class="rb-label">Current Market Regime</div>
+      <div class="rb-name" id="regime-name">—</div>
+      <div class="rb-desc" id="regime-desc">—</div>
+    </div>
+    <div class="rb-right" id="regime-tags"></div>
+  </div>
+
+  <!-- Detail row -->
+  <div class="detail-row" id="detail-row" style="display:none">
+    <div class="dc"><div class="dl">Best Granger Lag</div><div class="dv" id="det-lag">—</div><div class="ds">trading days</div></div>
+    <div class="dc"><div class="dl">Signal Direction</div><div class="dv" id="det-dir">—</div><div class="ds">vs ^KS200</div></div>
+    <div class="dc"><div class="dl">Wavelet SNR</div><div class="dv" id="det-snr">—</div><div class="ds">trend / noise ratio</div></div>
+    <div class="dc"><div class="dl">OLS Beta</div><div class="dv" id="det-beta">—</div><div class="ds">signal → price sensitivity</div></div>
+  </div>
+
+  <!-- Meta row -->
+  <div class="meta-row">
+    <div class="mc"><div class="ml">Primary Driver</div><div class="mv dim" id="sum-driver">—</div></div>
+    <div class="mc"><div class="ml">Top Score</div><div class="mv dim" id="sum-score">—</div><div class="ms">/10</div></div>
+    <div class="mc"><div class="ml">Vol Regime</div><div class="mv dim" id="sum-vol">—</div><div class="ms" id="sum-volsub">GARCH(1,1)</div></div>
+    <div class="mc"><div class="ml">Vol Clustering</div><div class="mv dim" id="sum-cluster">—</div><div class="ms" id="sum-persist">persistence —</div></div>
+  </div>
+
+  <!-- Output -->
+  <div class="output-panel">
+    <div class="op-header">
+      <div class="op-label">Econometric Interpretation <span class="method-badge">Granger · GARCH · Wavelet · OLS</span></div>
+    </div>
+    <div id="output-body"><div class="output-empty">Select sectors and run sweep to generate analysis.</div></div>
+  </div>
+
+  <div class="footnote">
+    Data: yfinance (^KS200, KRW=X, stock proxies) · FRED via pandas-datareader (USD/KRW) · pykrx (foreign flows)<br>
+    Methods: Granger causality maxlag=7 · OLS regression · GARCH(1,1) volatility · PyWavelets db4 decomposition<br>
+    Scoring: p&lt;0.01→+5 · p&lt;0.05→+3.5 · |r|&gt;0.3→+3 · R²&gt;0.1→+2 · scaled by (1−p) · No AI APIs used
+  </div>
+</div>
+
+<script>
+const SECTORS = ['cultural','tech','macro','consumption'];
+let selectedSectors = new Set(SECTORS);
+
+window.addEventListener('load', async () => {
+  document.getElementById('ts').textContent = new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  try {
+    const d = await (await fetch('/health')).json();
+    ['fdr','krx','fred'].forEach(k => {
+      document.getElementById('tag-'+k).className = d[k] ? 'tag ok' : 'tag err';
+    });
+  } catch(e) {}
+});
+
+function toggleCard(card) {
+  const key = card.dataset.sector;
+  if (selectedSectors.has(key)) {
+    if (selectedSectors.size === 1) return;
+    selectedSectors.delete(key); card.classList.add('off');
+  } else {
+    selectedSectors.add(key); card.classList.remove('off');
+  }
+}
+
+function badgeClass(strength) {
+  const s = (strength||'').toLowerCase();
+  if (s.includes('strong') && s.includes('negative')) return 'sb sb-strongneg';
+  if (s.includes('strong')) return 'sb sb-strong';
+  if (s.includes('moderate') && s.includes('negative')) return 'sb sb-modneg';
+  if (s.includes('moderate')) return 'sb sb-mod';
+  if (s.includes('weak') && s.includes('negative')) return 'sb sb-weakneg';
+  if (s.includes('weak')) return 'sb sb-weak';
+  if (s.includes('marginal')) return 'sb sb-marg';
+  return 'sb sb-none';
+}
+
+function resetUI() {
+  SECTORS.forEach(k => {
+    document.getElementById('bar-'+k).style.width = '0%';
+    ['score','corr','pval','r2'].forEach(f => {
+      const el = document.getElementById(f+'-'+k);
+      if(el){el.textContent='—';el.className='sv dim';}
+    });
+    const b = document.getElementById('badge-'+k);
+    b.textContent='—'; b.className='sb sb-none';
+  });
+  ['sum-driver','sum-score','sum-vol','sum-cluster'].forEach(id => {
+    const el=document.getElementById(id); el.textContent='—'; el.className='mv dim';
+  });
+  document.getElementById('detail-row').style.display='none';
+  document.getElementById('regime-banner').style.display='none';
+}
+
+function applyResult(r) {
+  document.getElementById('bar-'+r.key).style.width = Math.min(100,(r.score/10)*100).toFixed(1)+'%';
+  document.getElementById('score-'+r.key).textContent = r.score.toFixed(2);
+  document.getElementById('score-'+r.key).className = 'sv';
+  document.getElementById('corr-'+r.key).textContent = r.corr.toFixed(3);
+  document.getElementById('corr-'+r.key).className = 'sv';
+  document.getElementById('pval-'+r.key).textContent = r.pval<0.001?'<0.001':r.pval.toFixed(3);
+  document.getElementById('pval-'+r.key).className = 'sv';
+  const r2 = document.getElementById('r2-'+r.key);
+  if(r2){r2.textContent=(r.detail.r_squared||0).toFixed(3);r2.className='sv';}
+  const src = document.getElementById('src-'+r.key);
+  if(src) src.textContent = r.data_source;
+  const b = document.getElementById('badge-'+r.key);
+  b.textContent = r.strength.toUpperCase();
+  b.className = badgeClass(r.strength);
+}
+
+function showSkeleton() {
+  document.getElementById('output-body').innerHTML =
+    '<div class="skel" style="width:85%"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:55%"></div>';
+}
+
+function renderVolatility(vol) {
+  const regime = vol.regime||'—';
+  const el = document.getElementById('sum-vol');
+  el.textContent = regime;
+  el.className = 'mv '+({'High':'vol-high','Elevated':'vol-elevated','Normal':'vol-normal','Low':'vol-low'}[regime]||'dim');
+  if(vol.current_vol!=null) document.getElementById('sum-volsub').textContent=`${vol.current_vol.toFixed(2)}%/day · GARCH(1,1)`;
+  const cl = document.getElementById('sum-cluster');
+  cl.textContent = vol.clustering?'Yes':'No';
+  cl.className = 'mv '+(vol.clustering?'vol-elevated':'vol-normal');
+  if(vol.persistence) document.getElementById('sum-persist').textContent=`persistence ${vol.persistence.toFixed(3)}`;
+}
+
+function renderRegime(regime, vol) {
+  const banner = document.getElementById('regime-banner');
+  banner.style.display = 'flex';
+  document.getElementById('regime-name').textContent = regime.name||'—';
+  document.getElementById('regime-desc').textContent = regime.description||'';
+
+  const tags = document.getElementById('regime-tags');
+  tags.innerHTML = '';
+
+  const addTag = (text, cls) => {
+    const t = document.createElement('span');
+    t.className = 'regime-tag '+(cls||'');
+    t.textContent = text;
+    tags.appendChild(t);
+  };
+
+  if(regime.name && regime.name.toLowerCase().includes('tech')) addTag('Tech-Driven','rt-tech');
+  if(regime.name && regime.name.toLowerCase().includes('macro')) addTag('Macro-Driven','rt-macro');
+  addTag(regime.vol_tag||'Normal Vol',
+    (regime.vol_tag||'').includes('High')?'rt-vol-high':
+    (regime.vol_tag||'').includes('Elevated')?'rt-vol-elevated':'rt-vol-normal');
+  if(regime.dominant_count>0) addTag(`${regime.dominant_count} Strong Signal${regime.dominant_count>1?'s':''}`, 'rt-tech');
+}
+
+function renderTopDetail(results) {
+  const top = [...results].sort((a,b)=>b.score-a.score)[0];
+  if(!top||top.score===0) return;
+  document.getElementById('detail-row').style.display='grid';
+  document.getElementById('det-lag').textContent = top.detail.best_lag??'—';
+  document.getElementById('det-dir').textContent = top.detail.direction??'—';
+  document.getElementById('det-snr').textContent = top.detail.wavelet_snr!=null?top.detail.wavelet_snr.toFixed(2)+'x':'—';
+  document.getElementById('det-beta').textContent = top.detail.beta!=null?top.detail.beta.toFixed(4):'—';
+}
+
+function renderOutput(interp) {
+  const body = document.getElementById('output-body');
+  let html = '';
+
+  // Interpretation sentences
+  if(interp.sentences && interp.sentences.length) {
+    html += '<div class="interp-section">';
+    html += '<div class="section-label">Signal Analysis</div>';
+    html += interp.sentences.map(s=>`<div class="sentence">${s}</div>`).join('');
+    html += '</div><hr class="divider">';
+  }
+
+  // Signal ranking
+  if(interp.ranking && interp.ranking.length) {
+    html += '<div class="interp-section">';
+    html += '<div class="section-label">Top Drivers</div>';
+    html += '<table class="ranking-table"><thead><tr><th>#</th><th>Sector</th><th>Score</th><th>Strength</th><th>Direction</th></tr></thead><tbody>';
+    interp.ranking.forEach(r => {
+      const dirClass = r.direction==='positive'?'dir-pos':'dir-neg';
+      const dirArrow = r.direction==='positive'?'↑ Positive':'↓ Negative';
+      html += `<tr>
+        <td class="rank-num">${r.rank}</td>
+        <td>${r.label}</td>
+        <td class="rank-score">${r.score.toFixed(2)}</td>
+        <td>${r.strength}</td>
+        <td class="${dirClass}">${r.direction==='—'?'—':dirArrow}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div><hr class="divider">';
+  }
+
+  // Implication / action
+  if(interp.action && interp.action.length) {
+    html += '<div class="interp-section">';
+    html += '<div class="section-label">Implication</div>';
+    html += interp.action.map(a=>`<div class="action-item"><span class="arrow">→</span>${a}</div>`).join('');
+    html += '</div>';
+  }
+
+  body.innerHTML = html || '<div class="output-empty">No interpretation available.</div>';
+}
+
+async function runSweep() {
+  const sectors = [...selectedSectors];
+  const timeframe = document.getElementById('timeframe').value;
+  const btn = document.getElementById('run-btn');
+  const dot = document.getElementById('status-dot');
+
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Fetching data…';
+  dot.className='dot running';
+  resetUI(); showSkeleton();
+
+  try {
+    const res = await fetch('/sweep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sectors,timeframe})});
+    if(!res.ok){const err=await res.json();throw new Error(err.detail||'Server error '+res.status);}
+    const data = await res.json();
+
+    data.results.forEach((r,idx) => setTimeout(()=>applyResult(r), idx*150));
+
+    setTimeout(() => {
+      const top = [...data.results].sort((a,b)=>b.score-a.score)[0];
+      const dEl=document.getElementById('sum-driver'); dEl.textContent=top.label; dEl.className='mv';
+      const sEl=document.getElementById('sum-score'); sEl.textContent=top.score.toFixed(2); sEl.className='mv';
+      renderVolatility(data.volatility||{});
+      renderTopDetail(data.results);
+      if(data.interpretation?.regime) renderRegime(data.interpretation.regime, data.volatility||{});
+      renderOutput(data.interpretation||{});
+      document.getElementById('ts').textContent = data.timestamp;
+      dot.className='dot done';
+      btn.disabled=false; btn.textContent='▶ Run Sweep';
+    }, data.results.length*150+250);
+
+  } catch(err) {
+    document.getElementById('output-body').innerHTML=`<div class="error-box">Error: ${err.message}<br><br>Make sure server is running: <code>python KOSPI_Backend_v2.py</code></div>`;
+    dot.className='dot'; btn.disabled=false; btn.textContent='▶ Run Sweep';
+  }
+}
+</script>
+</body>
+</html>
