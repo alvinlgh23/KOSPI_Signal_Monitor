@@ -65,6 +65,8 @@
   .sl{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;}
   .sv{font-family:var(--mono);font-size:13px;color:var(--text);} .sv.dim{color:var(--dim);}
   .src{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .member-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+  .member-chip{font-family:var(--mono);font-size:9px;color:#c4b5fd;padding:3px 6px;border:1px solid rgba(167,139,250,0.24);border-radius:4px;background:rgba(167,139,250,0.055);}
 
   /* ── Regime banner ── */
   .regime-banner{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px 18px;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
@@ -136,7 +138,7 @@
   <div class="topbar">
     <div class="wordmark">
       <span class="wm-title">KOSPI · Signal Monitor</span>
-      <span class="tag ok" id="tag-ks200">^KS200</span>
+      <span class="tag ok" id="tag-kospi">^KS11</span>
       <span class="tag" id="tag-fdr">FDR</span>
       <span class="tag" id="tag-krx">KRX</span>
       <span class="tag" id="tag-fred">FRED</span>
@@ -169,7 +171,11 @@
         <div class="si"><div class="sl">p-value</div><div class="sv dim" id="pval-cultural">—</div></div>
         <div class="si"><div class="sl">R²</div><div class="sv dim" id="r2-cultural">—</div></div>
       </div>
-      <div class="src" id="src-cultural">HYBE + SM Entertainment (proxy)</div>
+      <div class="src" id="src-cultural">Listed K-pop agency basket</div>
+      <div class="member-chips" id="members-cultural">
+        <span class="member-chip">HYBE</span><span class="member-chip">SM</span><span class="member-chip">JYP</span><span class="member-chip">YG</span>
+        <span class="member-chip">Cube</span><span class="member-chip">FNC</span><span class="member-chip">RBW</span><span class="member-chip">Fantagio</span>
+      </div>
     </div>
     <div class="sc" id="card-tech" data-sector="tech" onclick="toggleCard(this)">
       <div class="ct"><div class="cn"><span class="pip pip-tech"></span>Tech / AI</div><span class="sb sb-none" id="badge-tech">—</span></div>
@@ -219,14 +225,14 @@
   <!-- Detail row -->
   <div class="detail-row" id="detail-row" style="display:none">
     <div class="dc"><div class="dl">Best Granger Lag</div><div class="dv" id="det-lag">—</div><div class="ds">trading days</div></div>
-    <div class="dc"><div class="dl">Signal Direction</div><div class="dv" id="det-dir">—</div><div class="ds">vs ^KS200</div></div>
+    <div class="dc"><div class="dl">Signal Direction</div><div class="dv" id="det-dir">—</div><div class="ds">vs ^KS11</div></div>
     <div class="dc"><div class="dl">Wavelet SNR</div><div class="dv" id="det-snr">—</div><div class="ds">trend / noise ratio</div></div>
     <div class="dc"><div class="dl">OLS Beta</div><div class="dv" id="det-beta">—</div><div class="ds">signal → price sensitivity</div></div>
   </div>
 
   <!-- Meta row -->
   <div class="meta-row">
-    <div class="mc"><div class="ml">Primary Driver</div><div class="mv dim" id="sum-driver">—</div></div>
+    <div class="mc"><div class="ml">Top Candidate</div><div class="mv dim" id="sum-driver">—</div></div>
     <div class="mc"><div class="ml">Top Score</div><div class="mv dim" id="sum-score">—</div><div class="ms">/10</div></div>
     <div class="mc"><div class="ml">Vol Regime</div><div class="mv dim" id="sum-vol">—</div><div class="ms" id="sum-volsub">GARCH(1,1)</div></div>
     <div class="mc"><div class="ml">Vol Clustering</div><div class="mv dim" id="sum-cluster">—</div><div class="ms" id="sum-persist">persistence —</div></div>
@@ -241,9 +247,9 @@
   </div>
 
   <div class="footnote">
-    Data: yfinance (^KS200, KRW=X, stock proxies) · FRED via pandas-datareader (USD/KRW) · pykrx (foreign flows)<br>
-    Methods: Granger causality maxlag=7 · OLS regression · GARCH(1,1) volatility · PyWavelets db4 decomposition<br>
-    Scoring: p&lt;0.01→+5 · p&lt;0.05→+3.5 · |r|&gt;0.3→+3 · R²&gt;0.1→+2 · scaled by (1−p) · No AI APIs used
+    Data: yfinance (^KS11, KRW=X, stock proxies) · FRED via pandas-datareader (USD/KRW) · pykrx (foreign flows)<br>
+    Methods: Granger causality maxlag=7 with lag-adjusted p-values · OLS regression · GARCH(1,1) volatility · PyWavelets db4 decomposition<br>
+    Scores are descriptive candidate relationships, not trading advice. No AI APIs used.
   </div>
 </div>
 
@@ -312,9 +318,17 @@ function applyResult(r) {
   if(r2){r2.textContent=(r.detail.r_squared||0).toFixed(3);r2.className='sv';}
   const src = document.getElementById('src-'+r.key);
   if(src) src.textContent = r.data_source;
+  if(r.key==='cultural') renderMembers(r);
   const b = document.getElementById('badge-'+r.key);
   b.textContent = r.strength.toUpperCase();
   b.className = badgeClass(r.strength);
+}
+
+function renderMembers(r) {
+  const host = document.getElementById('members-cultural');
+  const members = r.detail?.constituents || [];
+  if(!host || members.length===0) return;
+  host.innerHTML = members.map(m => `<span class="member-chip" title="${m.name} ${m.ticker}">${(m.name||'').replace(' Entertainment','')}</span>`).join('');
 }
 
 function showSkeleton() {
@@ -350,8 +364,8 @@ function renderRegime(regime, vol) {
     tags.appendChild(t);
   };
 
-  if(regime.name && regime.name.toLowerCase().includes('tech')) addTag('Tech-Driven','rt-tech');
-  if(regime.name && regime.name.toLowerCase().includes('macro')) addTag('Macro-Driven','rt-macro');
+  if(regime.name && regime.name.toLowerCase().includes('tech')) addTag('Tech-Sensitive','rt-tech');
+  if(regime.name && regime.name.toLowerCase().includes('macro')) addTag('Macro-Sensitive','rt-macro');
   addTag(regime.vol_tag||'Normal Vol',
     (regime.vol_tag||'').includes('High')?'rt-vol-high':
     (regime.vol_tag||'').includes('Elevated')?'rt-vol-elevated':'rt-vol-normal');

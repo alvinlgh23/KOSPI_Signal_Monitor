@@ -47,6 +47,22 @@ body::before{
 /* ── SHELL ── */
 .shell{max-width:1220px;margin:0 auto;padding:1.4rem 2rem 4rem;position:relative;z-index:1;}
 
+/* ── DATA READINESS ── */
+.health-strip{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-bottom:1.1rem;padding:10px 12px;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;
+}
+.health-left{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;}
+.health-dot{width:7px;height:7px;border-radius:50%;background:var(--dim);}
+.health-dot.ok{background:var(--strong);box-shadow:0 0 9px rgba(52,211,153,0.35);}
+.health-dot.warn{background:var(--moderate);box-shadow:0 0 9px rgba(251,191,36,0.28);}
+.health-pills{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.health-pill{font-family:var(--mono);font-size:10px;color:var(--muted);padding:4px 8px;border:1px solid var(--border2);border-radius:4px;background:rgba(255,255,255,0.015);}
+.health-pill.ok{color:var(--strong);border-color:rgba(52,211,153,0.28);}
+.health-pill.warn{color:var(--moderate);border-color:rgba(251,191,36,0.28);}
+.health-pill.err{color:var(--weak);border-color:rgba(248,113,113,0.25);}
+
 /* ── RUN PANEL ── */
 .run-panel{
   display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;
@@ -113,13 +129,15 @@ select:hover{border-color:var(--border3);}
 .rg-vol-sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5;}
 
 /* ── MAIN GRID ── */
-.main-grid{display:grid;grid-template-columns:1fr 1fr 380px;gap:10px;margin-bottom:10px;}
+.main-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(320px,380px);gap:10px;margin-bottom:10px;}
+@media(max-width:980px){.main-grid{grid-template-columns:1fr 1fr}.chart-panel{grid-column:1/-1}.regime-row{grid-template-columns:repeat(2,1fr)}.run-panel{grid-template-columns:1fr 1fr}.rp-run{min-width:0}.bottom-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.shell{padding:1rem 1rem 3rem}.topnav{padding:0 1rem}.main-grid,.regime-row,.run-panel{grid-template-columns:1fr}.rg-cell,.rp-field,.rp-run{border-right:none;border-bottom:1px solid var(--border)}.rg-cell:last-child,.rp-field:last-child{border-bottom:none}}
 
 /* ── SECTOR CARDS ── */
 .sector-card{
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
   padding:1.1rem 1.25rem;cursor:pointer;transition:border-color 0.2s,box-shadow 0.2s;
-  position:relative;overflow:hidden;
+  position:relative;overflow:hidden;min-width:0;
 }
 .sector-card::before{
   content:'';position:absolute;inset:0;opacity:0;transition:opacity 0.25s;pointer-events:none;
@@ -155,15 +173,18 @@ select:hover{border-color:var(--border3);}
 .stat-val{font-family:var(--mono);font-size:13px;color:var(--text);}
 .stat-val.dim{color:var(--dim);}
 .sc-source{font-family:var(--mono);font-size:9px;color:var(--muted);border-top:1px solid var(--border);padding-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.member-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:20px;}
+.member-chip{font-family:var(--mono);font-size:9px;color:var(--muted);padding:3px 6px;border:1px solid var(--border2);border-radius:4px;background:rgba(255,255,255,0.018);white-space:nowrap;}
+.member-chip.cultural{color:#c4b5fd;border-color:rgba(167,139,250,0.24);background:rgba(167,139,250,0.055);}
 
 /* ── CHART PANEL ── */
 .chart-panel{
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
-  padding:1.15rem 1.25rem;display:flex;flex-direction:column;
+  padding:1.15rem 1.25rem;display:flex;flex-direction:column;min-width:0;
 }
-.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;}
 .chart-title{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
-.chart-period{font-family:var(--mono);font-size:9px;color:var(--dim);}
+.chart-period{font-family:var(--mono);font-size:9px;color:var(--dim);white-space:nowrap;}
 .chart-area{position:relative;flex:1;min-height:220px;}
 canvas{display:block;width:100%;height:100%;}
 .chart-legend{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap;}
@@ -241,7 +262,7 @@ canvas{display:block;width:100%;height:100%;}
 <nav class="topnav">
   <div class="brand">
     <div class="brand-title">KOSPI SIGNAL MONITOR</div>
-    <div class="brand-sub">Market Intelligence Dashboard</div>
+    <div class="brand-sub">Candidate Signal Dashboard</div>
   </div>
   <div class="nav-right">
     <div class="live-dot"></div>
@@ -251,6 +272,19 @@ canvas{display:block;width:100%;height:100%;}
 </nav>
 
 <div class="shell">
+
+  <div class="health-strip">
+    <div class="health-left">
+      <span class="health-dot" id="health-dot"></span>
+      <span id="health-label">Checking data readiness</span>
+    </div>
+    <div class="health-pills">
+      <span class="health-pill" id="health-benchmark">Benchmark ^KS11</span>
+      <span class="health-pill" id="health-yahoo">Yahoo data</span>
+      <span class="health-pill" id="health-fred">FRED</span>
+      <span class="health-pill" id="health-krx">KRX optional</span>
+    </div>
+  </div>
 
   <!-- RUN ANALYSIS PANEL -->
   <div class="run-panel">
@@ -276,19 +310,16 @@ canvas{display:block;width:100%;height:100%;}
     <div class="rp-field">
       <div class="rp-field-label">Model</div>
       <div class="rp-select-wrap">
-        <select>
-          <option>Multi-Factor (OLS)</option>
-          <option>GARCH</option>
-          <option>Granger</option>
+        <select disabled>
+          <option>Granger + OLS + GARCH</option>
         </select>
       </div>
     </div>
     <div class="rp-field">
       <div class="rp-field-label">Benchmark</div>
       <div class="rp-select-wrap">
-        <select>
-          <option>^KS200 (KOSPI)</option>
-          <option>^KS11 (KOSPI 200)</option>
+        <select disabled>
+          <option>^KS11 (KOSPI Composite)</option>
         </select>
       </div>
     </div>
@@ -309,22 +340,22 @@ canvas{display:block;width:100%;height:100%;}
     <div class="rg-cell">
       <div class="rg-label">Market Regime</div>
       <div class="rg-regime-name" id="regime-name">—</div>
-      <div class="rg-desc" id="regime-desc">Run sweep to analyse current market conditions</div>
+      <div class="rg-desc" id="regime-desc">Run sweep to analyse current candidate relationships</div>
     </div>
     <div class="rg-cell">
-      <div class="rg-label">Primary Driver</div>
+      <div class="rg-label">Top Candidate</div>
       <div class="rg-driver-name" id="primary-driver">—</div>
       <div class="rg-score" id="primary-score">—</div>
       <div class="rg-badge sb-none" id="primary-badge">—</div>
     </div>
     <div class="rg-cell">
-      <div class="rg-label">Secondary Driver</div>
+      <div class="rg-label">Secondary Candidate</div>
       <div class="rg-driver-name" id="secondary-driver">—</div>
       <div class="rg-score" id="secondary-score">—</div>
       <div class="rg-badge sb-none" id="secondary-badge">—</div>
     </div>
     <div class="rg-cell">
-      <div class="rg-label">Risk Factor</div>
+      <div class="rg-label">Inverse / Weakest</div>
       <div class="rg-driver-name" id="risk-driver">—</div>
       <div class="rg-score" id="risk-score">—</div>
       <div class="rg-badge sb-none" id="risk-badge">—</div>
@@ -402,14 +433,24 @@ canvas{display:block;width:100%;height:100%;}
           <div class="stat-item"><div class="stat-label">P-Value</div><div class="stat-val dim" id="pval-cultural">—</div></div>
           <div class="stat-item"><div class="stat-label">R²</div><div class="stat-val dim" id="r2-cultural">—</div></div>
         </div>
-        <div class="sc-source" id="src-cultural">HYBE + SM Entertainment (normalized price proxy)</div>
+        <div class="sc-source" id="src-cultural">Listed K-pop agency basket</div>
+        <div class="member-chips" id="members-cultural">
+          <span class="member-chip cultural">HYBE</span>
+          <span class="member-chip cultural">SM</span>
+          <span class="member-chip cultural">JYP</span>
+          <span class="member-chip cultural">YG</span>
+          <span class="member-chip cultural">Cube</span>
+          <span class="member-chip cultural">FNC</span>
+          <span class="member-chip cultural">RBW</span>
+          <span class="member-chip cultural">Fantagio</span>
+        </div>
       </div>
     </div>
 
     <!-- Signal strength chart -->
     <div class="chart-panel">
       <div class="chart-header">
-        <div class="chart-title">Signal Strength Over Time (Normalized)</div>
+        <div class="chart-title">Observed Proxy Trend (Indexed)</div>
         <div class="chart-period" id="chart-period">—</div>
       </div>
       <div class="chart-area" id="chart-area">
@@ -420,7 +461,7 @@ canvas{display:block;width:100%;height:100%;}
         </div>
         <div class="no-data-state" id="chart-placeholder">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Run sweep to populate chart
+          Run sweep to plot observed proxy history
         </div>
       </div>
       <div class="chart-legend">
@@ -444,7 +485,7 @@ canvas{display:block;width:100%;height:100%;}
 
     <!-- Top Drivers Ranking -->
     <div class="bottom-panel">
-      <div class="bp-title">Top Drivers Ranking</div>
+      <div class="bp-title">Candidate Ranking</div>
       <table class="rank-table">
         <thead>
           <tr>
@@ -467,8 +508,8 @@ canvas{display:block;width:100%;height:100%;}
   </div>
 
   <div class="footnote">
-    Note: All signals are normalized and winsorized. Past performance is not indicative of future results.<br>
-    Data sources: yfinance · FRED (St. Louis Fed) · pykrx · FinanceDataReader
+    Note: Scores are descriptive candidate relationships, not trading advice. Granger p-values are lag-adjusted; wavelet denoising is full-sample and not real-time safe.<br>
+    Benchmark: ^KS11 KOSPI Composite · Data sources: yfinance · FRED (St. Louis Fed) · pykrx · FinanceDataReader
   </div>
 
 </div>
@@ -483,6 +524,32 @@ function updateTS() {
 }
 updateTS();
 setInterval(updateTS, 30000);
+
+async function updateHealth() {
+  const dot = document.getElementById('health-dot');
+  const label = document.getElementById('health-label');
+  try {
+    const res = await fetch('/health');
+    if (!res.ok) throw new Error('health check failed');
+    const health = await res.json();
+    dot.className = 'health-dot ok';
+    label.textContent = 'API ready';
+    document.getElementById('health-benchmark').textContent = health.benchmark_label || 'Benchmark ^KS11 KOSPI Composite';
+    document.getElementById('health-benchmark').className = 'health-pill ok';
+    document.getElementById('health-yahoo').className = 'health-pill ok';
+    document.getElementById('health-fred').className = 'health-pill ' + (health.fred ? 'ok' : 'err');
+    document.getElementById('health-fred').textContent = health.fred ? 'FRED ready' : 'FRED unavailable';
+    document.getElementById('health-krx').className = 'health-pill ' + (health.krx ? 'ok' : 'warn');
+    document.getElementById('health-krx').textContent = health.krx ? 'KRX ready' : 'KRX optional offline';
+  } catch (err) {
+    dot.className = 'health-dot warn';
+    label.textContent = 'Start backend to run analysis';
+    ['health-benchmark','health-yahoo','health-fred','health-krx'].forEach(id => {
+      document.getElementById(id).className = 'health-pill warn';
+    });
+  }
+}
+updateHealth();
 
 // ── Date range from timeframe ──
 function updateDateRange() {
@@ -499,7 +566,7 @@ document.getElementById('timeframe').addEventListener('change', updateDateRange)
 updateDateRange();
 
 // ── Chart state ──
-// Stores per-sector score history: { tech: [{t, v}, ...], ... }
+// Stores observed per-sector proxy history: { tech: [{t, v}, ...], ... }
 let chartData = {};
 let hiddenSeries = new Set();
 const SECTOR_COLORS = {tech:'#60a5fa', consumption:'#34d399', macro:'#fbbf24', cultural:'#a78bfa'};
@@ -556,7 +623,7 @@ function drawChart() {
   const globalMax = Math.max(...allVals);
   const range = globalMax - globalMin || 1;
 
-  // Normalise to [-1, 1] range for display (centred on mean)
+  // Normalize around visible data so differently scaled proxy baskets fit together.
   const mean = allVals.reduce((a,b)=>a+b,0)/allVals.length;
   const absMax = Math.max(Math.abs(globalMax - mean), Math.abs(globalMin - mean)) || 1;
 
@@ -671,7 +738,7 @@ document.getElementById('signalChart').addEventListener('mousemove', function(e)
     if (hiddenSeries.has(k) || !chartData[k] || !chartData[k][idx]) return;
     const v = chartData[k][idx].v;
     const color = SECTOR_COLORS[k];
-    rowsHtml += `<div class="tooltip-row"><span style="color:${color}">${SECTOR_LABELS[k]}</span><span style="color:var(--text)">${v.toFixed(2)}</span></div>`;
+    rowsHtml += `<div class="tooltip-row"><span style="color:${color}">${SECTOR_LABELS[k]}</span><span style="color:var(--text)">${v.toFixed(3)}x</span></div>`;
   });
 
   const tt = document.getElementById('chart-tooltip');
@@ -727,38 +794,12 @@ function scoreClass(key) {
   return 'rg-score';
 }
 
-// ── Score → chart signal: build a plausible time series from score + corr ──
-// The backend doesn't return time series — it returns scalar stats per sector.
-// We build a synthetic time-series that:
-//   • trends toward the final score value
-//   • respects the sign of corr (direction)
-//   • has realistic noise proportional to the score spread
-// This makes the chart CONSISTENT with the actual results.
-function buildSignalSeries(score, corr, days) {
-  const n = Math.min(days, 252); // trading days cap
-  const pts = [];
-  const now = Date.now();
-  const msPerDay = 86400000;
-
-  // Target normalised value based on score (0–10 scale → ≈ 0..1)
-  const target = (score / 10) * (corr >= 0 ? 1 : -1);
-  let val = target * 0.3; // start lower, drift toward target
-
-  // Seed deterministic noise from score
-  const seed = score * 7.3 + Math.abs(corr) * 31.1;
-  function noise(i) {
-    return (Math.sin(i * seed + 2.1) + Math.sin(i * 0.17 * seed + seed)) * 0.04;
-  }
-
-  for (let i = 0; i < n; i++) {
-    const progress = i / (n - 1);
-    const drift = (target - val) * 0.03; // pull toward target
-    val += drift + noise(i);
-    val = Math.max(-1.1, Math.min(1.1, val));
-    const ts = now - (n - 1 - i) * msPerDay;
-    pts.push({t: ts, v: val});
-  }
-  return pts;
+// ── Observed history from backend ──
+function observedSeries(r) {
+  const history = r.detail?.history || [];
+  return history
+    .filter(pt => pt.t && Number.isFinite(pt.signal))
+    .map(pt => ({t: new Date(pt.t + 'T00:00:00Z').getTime(), v: pt.signal}));
 }
 
 // ── Run Sweep ──
@@ -788,7 +829,7 @@ async function runSweep() {
     document.getElementById('last-run-ts').textContent = tsStr;
     const tfLabels = {'3m':'3 Months','6m':'6 Months','1y':'12 Months','2y':'2 Years'};
     document.getElementById('last-run-win').textContent = 'Window: ' + (tfLabels[timeframe]||timeframe);
-    document.getElementById('last-run-model').textContent = 'Model: Multi-Factor (OLS)';
+    document.getElementById('last-run-model').textContent = 'Model: Granger + OLS + GARCH';
     document.getElementById('last-run-badge').style.display = 'inline-flex';
     document.getElementById('last-run-time').textContent = elapsed + 's';
 
@@ -798,13 +839,11 @@ async function runSweep() {
     const fmt = d=>`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
     document.getElementById('chart-period').textContent = `${fmt(startD)} → ${fmt(now)}`;
 
-    // Build chart data from real scores
+    // Plot observed proxy history returned by the backend.
     chartData = {};
-    const dayMap = {'3m':90,'6m':180,'1y':252,'2y':504};
-    const nDays = dayMap[timeframe] || 252;
-
     data.results.forEach(r => {
-      chartData[r.key] = buildSignalSeries(r.score, r.corr, nDays);
+      const series = observedSeries(r);
+      if (series.length > 1) chartData[r.key] = series;
     });
 
     // Apply sector card results with stagger
@@ -850,7 +889,18 @@ function applyResult(r) {
   if (pvalEl) { pvalEl.textContent = r.pval < 0.001 ? '<0.001' : r.pval.toFixed(3); pvalEl.classList.remove('dim'); }
   if (r2El && r.detail?.r_squared != null) { r2El.textContent = r.detail.r_squared.toFixed(3); r2El.classList.remove('dim'); }
   if (srcEl && r.data_source) srcEl.textContent = r.data_source;
+  if (key === 'cultural') renderMembers(r);
   if (badgeEl) { badgeEl.textContent = r.strength.toUpperCase(); badgeEl.className = badgeClass(r.strength); }
+}
+
+function renderMembers(r) {
+  const host = document.getElementById('members-cultural');
+  const members = r.detail?.constituents || [];
+  if (!host || members.length === 0) return;
+  host.innerHTML = members.map(m => {
+    const shortName = (m.name || '').replace(' Entertainment', '');
+    return `<span class="member-chip cultural" title="${m.name} ${m.ticker}">${shortName}</span>`;
+  }).join('');
 }
 
 function applyRegime(regime, sorted, data) {

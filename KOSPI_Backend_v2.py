@@ -7,6 +7,7 @@ Enhanced: richer strength labels, negative bias detection, regime detection,
 
 import warnings
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -49,13 +50,29 @@ except ImportError:
 app = FastAPI(title="KOSPI Signal Monitor v2.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-BENCHMARK = "^KS200"
+BENCHMARK = "^KS11"
+BENCHMARK_LABEL = "^KS11 KOSPI Composite"
 TIMEFRAME_DAYS = {"3m": 90, "6m": 180, "1y": 365, "2y": 730}
+MAX_GRANGER_LAG = 7
 FRED_SERIES = {
     "usd_krw": "DEXKOUS",
     "us_fed_rate": "FEDFUNDS",
     "korea_manufacturing": "KORPROMAN02IXOBSAM",
 }
+KPOP_AGENCY_TICKERS = {
+    "HYBE": "352820.KS",
+    "SM Entertainment": "041510.KQ",
+    "JYP Entertainment": "035900.KQ",
+    "YG Entertainment": "122870.KQ",
+    "Cube Entertainment": "182360.KQ",
+    "FNC Entertainment": "173940.KQ",
+    "RBW": "361570.KQ",
+    "Fantagio": "032800.KQ",
+}
+KPOP_AGENCY_MEMBERS = [
+    {"name": name, "ticker": ticker}
+    for name, ticker in KPOP_AGENCY_TICKERS.items()
+]
 
 
 # ── Pydantic models ───────────────────────────────────────────
@@ -117,6 +134,8 @@ def fetch_benchmark(days: int) -> pd.Series:
     data = yf.download(BENCHMARK, start=start, progress=False)["Close"]
     if isinstance(data, pd.DataFrame):
         data = data.iloc[:, 0]
+    if data.empty:
+        raise ValueError(f"No benchmark data returned for {BENCHMARK}.")
     data.index = pd.to_datetime(data.index).tz_localize(None)
     return data.dropna()
 
@@ -141,6 +160,9 @@ def fetch_stock_proxy(tickers: list[str], days: int) -> Optional[pd.Series]:
             data = yf.download(t, start=start, progress=False)["Close"]
             if isinstance(data, pd.DataFrame):
                 data = data.iloc[:, 0]
+            if data.empty:
+                logger.warning(f"Stock fetch returned no rows ({t})")
+                continue
             data.index = pd.to_datetime(data.index).tz_localize(None)
             normalized = data / data.iloc[0]
             series_list.append(normalized.dropna())
@@ -171,8 +193,9 @@ def fetch_foreign_flows(days: int) -> Optional[pd.Series]:
 
 def get_sector_signal(sector_key: str, days: int) -> tuple[Optional[pd.Series], str]:
     if sector_key == "cultural":
-        s = fetch_stock_proxy(["352820.KS", "041510.KS"], days)
-        return s, "HYBE + SM Entertainment (normalized price proxy)"
+        s = fetch_stock_proxy(list(KPOP_AGENCY_TICKERS.values()), days)
+        names = " · ".join(KPOP_AGENCY_TICKERS.keys())
+        return s, f"Listed K-pop agency basket: {names} (normalized)"
     elif sector_key == "tech":
         s = fetch_stock_proxy(["000660.KS", "005930.KS"], days)
         return s, "SK Hynix + Samsung Electronics (normalized price proxy)"
@@ -222,6 +245,28 @@ def wavelet_decompose(series: pd.Series, wavelet: str = "db4", level: int = 3):
     trend = pd.Series(trend_values, index=series.dropna().index)
     noise = series.dropna() - trend
     return trend, noise
+
+def observed_history(signal_series: pd.Series, price_series: pd.Series, max_points: int = 252) -> list[dict]:
+    combined = pd.DataFrame({"benchmark": price_series, "signal": signal_series}).dropna()
+    if combined.empty:
+        return []
+    combined = combined.tail(max_points)
+    base_signal = float(combined["signal"].iloc[0])
+    base_benchmark = float(combined["benchmark"].iloc[0])
+    if base_signal == 0 or base_benchmark == 0:
+        return []
+    indexed = pd.DataFrame({
+        "signal": combined["signal"] / base_signal,
+        "benchmark": combined["benchmark"] / base_benchmark,
+    })
+    return [
+        {
+            "t": idx.strftime("%Y-%m-%d"),
+            "signal": round(float(row["signal"]), 4),
+            "benchmark": round(float(row["benchmark"]), 4),
+        }
+        for idx, row in indexed.iterrows()
+    ]
 
 def compute_garch_volatility(returns: pd.Series) -> dict:
     clean = returns.dropna() * 100
@@ -280,11 +325,13 @@ def compute_signal_score(signal_series: pd.Series, price_series: pd.Series) -> t
     corr = float(returns["price"].corr(returns["signal"]))
 
     try:
-        gc_res = grangercausalitytests(returns[["price", "signal"]], maxlag=7, verbose=False)
-        p_values = [gc_res[lag + 1][0]["ssr_ftest"][1] for lag in range(7)]
-        min_p = float(min(p_values))
+        gc_res = grangercausalitytests(returns[["price", "signal"]], maxlag=MAX_GRANGER_LAG, verbose=False)
+        p_values = [gc_res[lag + 1][0]["ssr_ftest"][1] for lag in range(MAX_GRANGER_LAG)]
+        raw_min_p = float(min(p_values))
+        min_p = min(raw_min_p * len(p_values), 1.0)
         best_lag = int(np.argmin(p_values)) + 1
     except Exception:
+        raw_min_p = 1.0
         min_p = 1.0
         best_lag = 0
 
@@ -316,6 +363,9 @@ def compute_signal_score(signal_series: pd.Series, price_series: pd.Series) -> t
         "beta": round(beta, 4),
         "r_squared": round(r_squared, 4),
         "wavelet_snr": wavelet_snr,
+        "raw_granger_pval": round(raw_min_p, 4),
+        "lag_adjusted_pval": round(min_p, 4),
+        "pval_adjustment": f"Bonferroni across {MAX_GRANGER_LAG} tested lags",
         "obs": len(returns),
         "direction": "positive" if corr >= 0 else "negative",
     }
@@ -339,33 +389,33 @@ def detect_regime(results: list[dict], vol_data: dict) -> dict:
     # Primary regime name
     if not top or top[0]["score"] < 2:
         regime_name = "Indeterminate"
-        regime_desc = "No sector shows statistically meaningful explanatory power."
+        regime_desc = "No sector shows statistically meaningful candidate signal."
     else:
         top_key = top[0]["key"]
         top_dir = top[0]["detail"].get("direction", "positive")
 
         if top_key == "tech":
-            regime_name = "Tech-Driven"
-            regime_desc = "Semiconductor/AI sector momentum is the primary KOSPI driver."
+            regime_name = "Tech-Sensitive"
+            regime_desc = "Semiconductor/AI proxy has the strongest candidate relationship with KOSPI returns."
         elif top_key == "macro":
             if top_dir == "negative":
-                regime_name = "Macro-Driven (FX Stress)"
-                regime_desc = "KRW weakness / USD strength is suppressing KOSPI returns."
+                regime_name = "Macro-Sensitive (FX Stress)"
+                regime_desc = "USD/KRW has the strongest inverse candidate relationship with KOSPI returns."
             else:
-                regime_name = "Macro-Driven"
-                regime_desc = "Macro conditions (FX, rates) are the primary KOSPI driver."
+                regime_name = "Macro-Sensitive"
+                regime_desc = "Macro proxy has the strongest candidate relationship with KOSPI returns."
         elif top_key == "cultural":
-            regime_name = "Sentiment-Driven"
-            regime_desc = "K-wave / cultural sector momentum is leading KOSPI moves."
+            regime_name = "Sentiment-Sensitive"
+            regime_desc = "K-wave / cultural proxy has the strongest candidate relationship with KOSPI returns."
         elif top_key == "consumption":
-            regime_name = "Consumption-Driven"
-            regime_desc = "Broad consumer demand (autos, electronics, beauty, retail) is the primary KOSPI driver."
+            regime_name = "Consumption-Sensitive"
+            regime_desc = "Broad consumer proxy has the strongest candidate relationship with KOSPI returns."
         elif top_key == "foreign_flow":
-            regime_name = "Flow-Driven"
-            regime_desc = "Foreign investor net buying/selling is the dominant force."
+            regime_name = "Flow-Sensitive"
+            regime_desc = "Foreign investor flow has the strongest candidate relationship with KOSPI returns."
         else:
-            regime_name = f"{top[0]['label']}-Driven"
-            regime_desc = f"{top[0]['label']} is the primary market driver."
+            regime_name = f"{top[0]['label']}-Sensitive"
+            regime_desc = f"{top[0]['label']} has the strongest candidate relationship."
 
     # Volatility overlay
     if vol_regime in ["High", "Elevated"] and clustering:
@@ -407,11 +457,11 @@ def generate_interpretation(results: list[dict], vol_data: dict) -> dict:
             else "negatively correlated (inverse relationship)"
         )
         primary_sentence = (
-            f"{top['label']} is the dominant market driver "
-            f"(score {top['score']:.2f}/10, p={top['pval']:.3f}), "
-            f"{direction_phrase} with ^KS200 returns "
+            f"{top['label']} is the strongest candidate signal "
+            f"(score {top['score']:.2f}/10, lag-adjusted p={top['pval']:.3f}), "
+            f"{direction_phrase} with {BENCHMARK_LABEL} returns "
             f"(r={top['corr']:.3f}, β={top['detail'].get('beta', 0):.4f}). "
-            f"Best predictive lag: {top['detail'].get('best_lag', '?')} trading day(s)."
+            f"Best tested lag: {top['detail'].get('best_lag', '?')} trading day(s)."
         )
         sentences.append(primary_sentence)
 
@@ -430,8 +480,8 @@ def generate_interpretation(results: list[dict], vol_data: dict) -> dict:
             )
         elif top["key"] == "cultural":
             sentences.append(
-                "Cultural proxy tracks K-wave commercial momentum via HYBE and SM Entertainment — "
-                "leading indicators of Hallyu export strength and soft-power sentiment."
+                "Cultural proxy tracks listed K-pop agency momentum across HYBE, SM, JYP, YG, "
+                "Cube, FNC, RBW, and Fantagio."
             )
         elif top["key"] == "macro":
             sentences.append(
@@ -440,9 +490,9 @@ def generate_interpretation(results: list[dict], vol_data: dict) -> dict:
             )
     else:
         sentences.append(
-            "No sector shows statistically significant Granger causality with ^KS200 "
+            f"No sector shows a statistically significant lag-adjusted Granger relationship with {BENCHMARK_LABEL} "
             f"over this timeframe (best score: {top['score']:.2f}/10 — below significance threshold). "
-            "The market appears driven by global macro or idiosyncratic factors not captured in this model."
+            "Index movement may be tied to global macro, idiosyncratic factors, or relationships not captured in this model."
         )
 
     # ── Secondary / no-signal sectors ──
@@ -453,7 +503,7 @@ def generate_interpretation(results: list[dict], vol_data: dict) -> dict:
         names = ", ".join(r["label"] for r in no_signal)
         sentences.append(
             f"No reliable explanatory power detected in: {names}. "
-            "These sectors show p-values above significance thresholds and negligible correlation with index returns."
+            "These sectors show lag-adjusted p-values above significance thresholds or negligible correlation with index returns."
         )
 
     if moderate_sigs:
@@ -461,7 +511,7 @@ def generate_interpretation(results: list[dict], vol_data: dict) -> dict:
             dir_word = "positive" if r["detail"].get("direction") == "positive" else "negative"
             sentences.append(
                 f"{r['label']} shows a {r['strength'].lower()} signal "
-                f"(score {r['score']:.2f}, r={r['corr']:.3f}, p={r['pval']:.3f}) "
+                f"(score {r['score']:.2f}, r={r['corr']:.3f}, lag-adjusted p={r['pval']:.3f}) "
                 f"with a {dir_word} directional bias."
             )
 
@@ -480,26 +530,31 @@ def generate_interpretation(results: list[dict], vol_data: dict) -> dict:
         if snr > 5:
             sentences.append(
                 f"Wavelet decomposition confirms a strong trend component in {top['label']} "
-                f"(SNR={snr:.1f}x) — low noise contamination in the Granger test."
+                f"(SNR={snr:.1f}x) after full-sample denoising."
             )
         elif snr < 2:
             sentences.append(
                 f"Note: {top['label']} signal is noise-dominated (wavelet SNR={snr:.1f}x). "
-                "Score may be overstated — interpret with caution."
+                "Score may be overstated; interpret with caution."
             )
+
+    sentences.append(
+        "Method note: Granger p-values are Bonferroni-adjusted across tested lags. "
+        "Wavelet denoising uses the full sample, so results are descriptive and not a real-time trading signal."
+    )
 
     # ── Action layer ──
     if top and top["score"] > 7:
         action_lines.append(
-            f"Market is likely sensitive to {top['label']}-related news and earnings. "
+            f"Market may be sensitive to {top['label']}-related news and earnings. "
             f"Directional bias: {'bullish' if top['detail'].get('direction') == 'positive' else 'bearish'} on {top['label']} strength."
         )
         action_lines.append(
-            f"Monitor {top['label']} sector catalysts with a {top['detail'].get('best_lag', '?')}-day lead for KOSPI positioning."
+            f"Monitor {top['label']} sector catalysts around the {top['detail'].get('best_lag', '?')}-day tested lag; confirm with fresh data before positioning."
         )
     elif top and top["score"] > 4:
         action_lines.append(
-            f"Moderate signal environment — {top['label']} has partial explanatory power but confirmation is needed before directional exposure."
+            f"Moderate signal environment: {top['label']} has partial explanatory power, but confirmation is needed before directional exposure."
         )
     else:
         action_lines.append(
@@ -514,7 +569,7 @@ def generate_interpretation(results: list[dict], vol_data: dict) -> dict:
     # ── Signal ranking ──
     ranking = []
     SECTOR_DEFS = {
-        "cultural":    {"proxy": "HYBE + SM Entertainment", "scope": "K-wave / cultural export momentum"},
+        "cultural":    {"proxy": "HYBE · SM · JYP · YG · Cube · FNC · RBW · Fantagio", "scope": "Listed K-pop agency basket"},
         "tech":        {"proxy": "SK Hynix + Samsung Electronics", "scope": "Semiconductor / AI chip demand"},
         "macro":       {"proxy": "USD/KRW exchange rate", "scope": "FX stress / macro conditions"},
         "consumption": {"proxy": "Amorepacific · LG H&H · LG Electronics · Hyundai · Kia · BGF Retail", "scope": "Domestic + global consumer demand (beauty · auto · electronics · retail)"},
@@ -560,7 +615,17 @@ def serve_frontend():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "fdr": HAS_FDR, "krx": HAS_KRX, "fred": HAS_FRED, "gemini": False}
+    krx_configured = HAS_KRX and bool(os.getenv("KRX_ID") and os.getenv("KRX_PW"))
+    return {
+        "status": "ok",
+        "benchmark": BENCHMARK,
+        "benchmark_label": BENCHMARK_LABEL,
+        "fdr": HAS_FDR,
+        "krx": krx_configured,
+        "krx_imported": HAS_KRX,
+        "fred": HAS_FRED,
+        "gemini": False,
+    }
 
 @app.post("/sweep", response_model=SweepResponse)
 def run_sweep(req: SweepRequest):
@@ -588,16 +653,22 @@ def run_sweep(req: SweepRequest):
         label = label_map.get(sector_key, sector_key.title())
 
         if signal is None or len(signal.dropna()) < 20:
+            detail = {"error": "no data", "direction": "—", "best_lag": 0, "beta": 0, "r_squared": 0, "wavelet_snr": None, "obs": 0}
+            if sector_key == "cultural":
+                detail["constituents"] = KPOP_AGENCY_MEMBERS
             results_raw.append({
                 "key": sector_key, "label": label,
                 "score": 0.0, "corr": 0.0, "pval": 1.0,
                 "strength": "No Signal", "strength_short": "NONE",
                 "data_source": source or "unavailable",
-                "detail": {"error": "no data", "direction": "—", "best_lag": 0, "beta": 0, "r_squared": 0, "wavelet_snr": None, "obs": 0},
+                "detail": detail,
             })
             continue
 
         score, corr, pval, detail = compute_signal_score(signal, market_data)
+        detail["history"] = observed_history(signal, market_data)
+        if sector_key == "cultural":
+            detail["constituents"] = KPOP_AGENCY_MEMBERS
         full_label, short_label = strength_label(score, corr, pval)
 
         results_raw.append({
@@ -619,4 +690,4 @@ def run_sweep(req: SweepRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("KOSPI_Backend_v2:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("KOSPI_Backend_v2:app", host="127.0.0.1", port=8000, reload=False)
