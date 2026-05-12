@@ -4,6 +4,8 @@ An exploratory econometric dashboard for checking candidate relationships betwee
 
 The app uses Granger causality tests, OLS correlation/regression summaries, GARCH(1,1) volatility estimates, and wavelet signal/noise diagnostics. Outputs should be read as descriptive research signals, not proof of causality and not trading advice.
 
+The dashboard also includes an export-earnings snapshot comparing semiconductors, ICT exports excluding semiconductors, and K-content categories such as games, music/K-pop, and broadcast/video/K-drama.
+
 ## Quick start
 
 ```bash
@@ -18,6 +20,8 @@ Then open `http://localhost:8000`.
 - Benchmark: Yahoo Finance `^KS11` KOSPI Composite.
 - Stock proxies: yfinance Korean tickers.
 - Cultural proxy: HYBE, SM Entertainment, JYP Entertainment, YG Entertainment, Cube Entertainment, FNC Entertainment, RBW, and Fantagio.
+- Export earnings snapshot: MOTIR/MSIT 2025 annual exports / ICT exports, KOCCA 2025 content-industry trend totals, and latest available detailed content-category splits.
+- Optional monthly goods refresh: set `DATA_GO_KR_SERVICE_KEY` or `KOREA_CUSTOMS_SERVICE_KEY` to use Korea Customs item-trade data for semiconductor HS codes `8541` and `8542`. K-content export earnings remain annual survey data because culture/content services are not published as live customs goods statistics.
 - FX macro proxy: FRED `DEXKOUS`, with yfinance `KRW=X` fallback.
 - Foreign-flow proxy: `pykrx`, only when KRX credentials/environment work locally.
 

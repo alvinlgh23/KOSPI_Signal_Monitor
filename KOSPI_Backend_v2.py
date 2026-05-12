@@ -8,6 +8,7 @@ Enhanced: richer strength labels, negative bias detection, regime detection,
 import warnings
 import logging
 import os
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import pywt
+import requests
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
@@ -73,6 +75,79 @@ KPOP_AGENCY_MEMBERS = [
     {"name": name, "ticker": ticker}
     for name, ticker in KPOP_AGENCY_TICKERS.items()
 ]
+EXPORT_EARNINGS_2024 = {
+    "year": 2025,
+    "as_of": "2025 annual releases; some detailed K-content category splits use latest available 2024 survey values",
+    "update_mode": "latest_annual_mixed_detail",
+    "currency": "USD",
+    "total_exports_b": 709.7,
+    "items": [
+        {
+            "key": "semiconductors",
+            "label": "Semiconductors",
+            "value_b": 173.4,
+            "source": "MOTIR/MSIT ICT exports, 2025",
+            "period": "2025",
+            "note": "Record annual semiconductor exports, driven by AI demand.",
+        },
+        {
+            "key": "ict_ex_semis",
+            "label": "ICT ex-Semis",
+            "value_b": 90.9,
+            "source": "MOTIR/MSIT ICT exports, 2025",
+            "period": "2025",
+            "note": "ICT total minus semiconductor exports.",
+        },
+        {
+            "key": "k_content",
+            "label": "K-Content Total",
+            "value_b": 14.90582,
+            "source": "KOCCA 2025 Q4 and Annual Content Industry Trends Analysis Report",
+            "period": "2025",
+            "note": "Includes games, music, broadcasting/video, publishing, animation, film, and other content categories.",
+        },
+        {
+            "key": "games",
+            "label": "Games",
+            "value_b": 8.5,
+            "source": "MCST 2024 Content Industry Survey",
+            "period": "2024 detailed category",
+            "note": "Latest detailed category value in this dashboard; 2025 detailed genre value not yet wired in.",
+        },
+        {
+            "key": "music",
+            "label": "Music / K-pop",
+            "value_b": 2.383,
+            "source": "2024 MCST value adjusted by KOCCA-reported 2025 music export growth (+32.4%)",
+            "period": "2025 estimate",
+            "note": "Closest official category for K-pop export earnings; estimated from latest reported growth rate.",
+        },
+        {
+            "key": "broadcast_video",
+            "label": "Broadcast / Video",
+            "value_b": 1.26,
+            "source": "MCST 2024 Content Industry Survey",
+            "period": "2024 detailed category",
+            "note": "Closest official category for K-drama/video; latest detailed value currently remains 2024.",
+        },
+    ],
+    "sources": [
+        {
+            "label": "MOTIR/MSIT annual ICT exports 2025",
+            "url": "https://english.motir.go.kr/eng/article/EATCLdfa319ada/2480/view?bbsCdN=2&pageIndex=1",
+        },
+        {
+            "label": "MOTIR annual exports 2025",
+            "url": "https://www.korea.net/Government/Briefing-Room/Press-Releases/view?articleId=8461&insttCode=A110412&type=O",
+        },
+        {
+            "label": "KOCCA 2025 content industry trends coverage",
+            "url": "https://www.ajupress.com/view/20260430094170150",
+        },
+    ],
+}
+CUSTOMS_ITEMTRADE_URL = "https://apis.data.go.kr/1220000/Itemtrade/getItemtradeList"
+SEMICONDUCTOR_HS_CODES = ["8541", "8542"]
 
 
 # ── Pydantic models ───────────────────────────────────────────
@@ -267,6 +342,85 @@ def observed_history(signal_series: pd.Series, price_series: pd.Series, max_poin
         }
         for idx, row in indexed.iterrows()
     ]
+
+def data_go_kr_key() -> Optional[str]:
+    return os.getenv("DATA_GO_KR_SERVICE_KEY") or os.getenv("KOREA_CUSTOMS_SERVICE_KEY")
+
+def latest_customs_month(today: Optional[datetime] = None) -> str:
+    today = today or datetime.today()
+    # Korea Customs says previous-month data is refreshed around the 15th.
+    month_offset = 1 if today.day >= 18 else 2
+    year = today.year
+    month = today.month - month_offset
+    while month <= 0:
+        month += 12
+        year -= 1
+    return f"{year}{month:02d}"
+
+def parse_usd(value: Optional[str]) -> float:
+    if not value:
+        return 0.0
+    return float(str(value).replace(",", "").strip() or 0)
+
+def fetch_customs_export_usd(hs_codes: list[str], yyyymm: str) -> Optional[float]:
+    key = data_go_kr_key()
+    if not key:
+        return None
+
+    total = 0.0
+    for hs_code in hs_codes:
+        try:
+            res = requests.get(
+                CUSTOMS_ITEMTRADE_URL,
+                params={
+                    "serviceKey": key,
+                    "strtYymm": yyyymm,
+                    "endYymm": yyyymm,
+                    "hsSgn": hs_code,
+                },
+                timeout=12,
+            )
+            res.raise_for_status()
+            root = ET.fromstring(res.text)
+            result_code = root.findtext(".//resultCode")
+            if result_code and result_code != "00":
+                logger.warning("Korea Customs API returned %s for HS %s", result_code, hs_code)
+                return None
+            for item in root.findall(".//item"):
+                total += parse_usd(item.findtext("expDlr"))
+        except Exception as e:
+            logger.warning(f"Korea Customs fetch failed ({hs_code}, {yyyymm}): {e}")
+            return None
+    return total
+
+def export_earnings_payload() -> dict:
+    data = EXPORT_EARNINGS_2024.copy()
+    items = [item.copy() for item in EXPORT_EARNINGS_2024["items"]]
+    key = data_go_kr_key()
+    latest_month = latest_customs_month()
+    live_note = "Set DATA_GO_KR_SERVICE_KEY to enable monthly Korea Customs goods-export refreshes."
+
+    if key:
+        semis_usd = fetch_customs_export_usd(SEMICONDUCTOR_HS_CODES, latest_month)
+        if semis_usd is not None:
+            semis_b = round(semis_usd / 1_000_000_000, 3)
+            for item in items:
+                if item["key"] == "semiconductors":
+                    item.update({
+                        "value_b": semis_b,
+                        "source": f"Korea Customs HS 8541+8542, {latest_month}",
+                        "note": "Monthly customs goods export value; not directly comparable to annual content survey without annualization.",
+                        "period": latest_month,
+                    })
+            data["as_of"] = f"Latest monthly customs where available: {latest_month}"
+            data["update_mode"] = "mixed_monthly_goods_and_annual_content"
+            live_note = "Semiconductors use latest monthly customs data; K-content uses latest official annual survey."
+
+    data["live_update_note"] = live_note
+    data["customs_api_configured"] = bool(key)
+    data["latest_customs_month"] = latest_month
+    data["items"] = items
+    return data
 
 def compute_garch_volatility(returns: pd.Series) -> dict:
     clean = returns.dropna() * 100
@@ -626,6 +780,20 @@ def health():
         "fred": HAS_FRED,
         "gemini": False,
     }
+
+@app.get("/exports")
+def export_earnings():
+    data = export_earnings_payload()
+    items = []
+    for item in data["items"]:
+        enriched = item.copy()
+        enriched["share_of_total_exports"] = round(
+            item["value_b"] / data["total_exports_b"] * 100,
+            2,
+        )
+        items.append(enriched)
+    data["items"] = items
+    return data
 
 @app.post("/sweep", response_model=SweepResponse)
 def run_sweep(req: SweepRequest):
