@@ -1,5 +1,11 @@
 # KOSPI Signal Monitor
 
+<img width="1440" height="777" alt="Screenshot 2026-05-12 at 3 07 07 PM" src="https://github.com/user-attachments/assets/7b4d8c06-c6a9-4058-8dca-7f490c554843" />
+
+<img width="1440" height="722" alt="Screenshot 2026-05-12 at 3 07 39 PM" src="https://github.com/user-attachments/assets/ef447652-c9a3-42e0-bb08-3c217e3573fe" />
+
+
+
 An exploratory econometric dashboard for checking candidate relationships between the KOSPI Composite (`^KS11`) and a small set of market proxies: semiconductors, USD/KRW, consumer stocks, listed K-pop agency stocks, and optional foreign-flow data.
 
 The app uses Granger causality tests, OLS correlation/regression summaries, GARCH(1,1) volatility estimates, and wavelet signal/noise diagnostics. Outputs should be read as descriptive research signals, not proof of causality and not trading advice.
